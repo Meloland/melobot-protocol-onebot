@@ -5,7 +5,7 @@
 groups = ["default", "docs", "lint", "manage", "test"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:e1ec95a63e9f23cb41c52359d2a2d8bf22369775238b5cb132fae4d4970ad115"
+content_hash = "sha256:8f87cae4c57dd24aa054d2e5786b2d4796f7973c26f2e468bc844cfc6eb3909f"
 
 [[metadata.targets]]
 requires_python = ">=3.10"
@@ -458,7 +458,7 @@ files = [
 
 [[package]]
 name = "melobot"
-version = "3.0.0rc1"
+version = "3.0.0rc2"
 requires_python = ">=3.10"
 summary = "A bot framework with much high level features."
 groups = ["default"]
@@ -470,8 +470,8 @@ dependencies = [
     "typing-extensions>=4.10.0",
 ]
 files = [
-    {file = "melobot-3.0.0rc1-py3-none-any.whl", hash = "sha256:0f2466fb41efdf09da661b36252f2a6fa463c34e46c06fef39b678fecf0a0a4f"},
-    {file = "melobot-3.0.0rc1.tar.gz", hash = "sha256:c562e6c2c2de1b184a6c8133482a455f10ede3fbbb079b472b019b0b4c7ae6d7"},
+    {file = "melobot-3.0.0rc2-py3-none-any.whl", hash = "sha256:23b76fc66bcb6ef39a7bed5958da911f1cf7f1ba3517c7af67b1b59ebafcdf63"},
+    {file = "melobot-3.0.0rc2.tar.gz", hash = "sha256:5fb949a35fc8361e68a61b0a92a2ae4820598c4b1fd6f8c57c80f0cf45357a4a"},
 ]
 
 [[package]]

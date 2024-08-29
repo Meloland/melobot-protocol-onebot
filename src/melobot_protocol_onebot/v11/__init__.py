@@ -1,0 +1,1 @@
+PROTOCOL_IDENTIFIER = "onebot-v11"
