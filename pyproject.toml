@@ -1,0 +1,99 @@
+[project]
+name = "melobot-protocol-onebot"
+version = "1.0.0rc1"
+description = "IO and adapter layer implementation of onebot protocol for melobot."
+authors = [
+    {name = "aicorein", email = "aicorein@meloland.org"},
+]
+maintainers = [
+    {name = "aicorein", email = "aicorein@meloland.org"}
+]
+dependencies = [
+    "melobot==3.0.0rc1",
+]
+requires-python = ">=3.10"
+readme = "README.md"
+license = {text = "BSD"}
+keywords = ["melobot", "bot framework", "asyncio", "coroutine", "concurrency"]
+classifiers = [
+    "Development Status :: 1 - Planning",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: BSD License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Typing :: Typed"
+]
+
+[project.urls]
+Homepage = "https://github.com/Meloland/melobot-protocol-onebot"
+Repository = "https://github.com/Meloland/melobot-protocol-onebot.git"
+Issues = "https://github.com/Meloland/melobot-protocol-onebot/issues"
+
+[build-system]
+requires = ["pdm-backend"]
+build-backend = "pdm.backend"
+
+[tool.mypy]
+follow_imports = "skip"
+ignore_missing_imports = true
+show_column_numbers = true
+check_untyped_defs = true
+disallow_untyped_defs = true
+warn_return_any = true
+warn_redundant_casts = true
+disallow_untyped_calls = true
+strict_equality = true
+
+[tool.black]  
+line-length = 90
+
+[tool.isort]  
+profile = "black"
+line_length = 90
+
+[tool.pdm]
+distribution = true
+
+[tool.pdm.scripts]
+fresh = {call = "fresh_proj_depends:main"}
+isort = {shell = "isort src/melobot_protocol_onebot"}
+format = {shell = "black src/melobot_protocol_onebot"}
+check = {shell = "flake8 src/melobot_protocol_onebot"}
+analyse = {shell = "mypy src/melobot_protocol_onebot"}
+pylint = {shell = "pylint src/melobot_protocol_onebot"}
+all_lint = {shell = "isort src/melobot_protocol_onebot && black src/melobot_protocol_onebot && flake8 src/melobot_protocol_onebot && mypy src/melobot_protocol_onebot && pylint src/melobot_protocol_onebot"}
+test = {shell = "pytest -c pytest.ini"}
+trace = {shell = "viztracer"}
+deps = {shell = "pydeps src/melobot_protocol_onebot -o pydeps.png -T png --only melobot_protocol_onebot --rankdir BT --max-module-depth 2 --start-color 160"}
+docs = {call = "docs.make:main"}
+
+[tool.pdm.dev-dependencies]
+test = [
+    "pytest>=8.3.2",
+    "viztracer>=0.16.3",
+    "pytest-asyncio>=0.24.0",
+]
+docs = [
+    "sphinx>=8.0.2",
+    "furo>=2024.8.6",
+    "myst-parser>=4.0.0",
+    "sphinx-copybutton>=0.5.2",
+]
+lint = [
+    "black>=24.8.0",
+    "pydeps>=1.12.20",
+    "isort>=5.13.2",
+    "flake8>=7.1.1",
+    "pylint>=3.2.6",
+    "mypy>=1.11.2",
+]
+manage = [
+    "toml>=0.10.2",
+]
