@@ -12,6 +12,7 @@ dependencies = [
     "melobot==3.0.0rc2",
     "pydantic>=2.8.2,<3",
     "typing-extensions>=4.12.2",
+    "beartype>=0.18.5",
 ]
 requires-python = ">=3.10"
 readme = "README.md"
@@ -43,7 +44,8 @@ requires = ["pdm-backend"]
 build-backend = "pdm.backend"
 
 [tool.mypy]
-follow_imports = "skip"
+plugins = ["pydantic.mypy"]
+follow_imports = "normal"
 ignore_missing_imports = true
 show_column_numbers = true
 check_untyped_defs = true
