@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from functools import partial
 from itertools import chain, zip_longest
@@ -10,15 +11,23 @@ from typing import (
     Literal,
     Match,
     TypeAlias,
-    TypeVar,
     cast,
+    final,
     get_args,
     overload,
 )
 
 from beartype.door import is_subhint
-from pydantic import AnyHttpUrl, AnyUrl, BaseModel, UrlConstraints, create_model
-from typing_extensions import NotRequired, Self, TypedDict
+from pydantic import (
+    AnyHttpUrl,
+    AnyUrl,
+    BaseModel,
+    Discriminator,
+    Tag,
+    UrlConstraints,
+    create_model,
+)
+from typing_extensions import NotRequired, Self, TypedDict, TypeVar
 
 from ..const import T, V
 
@@ -27,11 +36,11 @@ FileUrl: TypeAlias = Annotated[
 ]
 
 
-class _BaseTypedDict(TypedDict): ...
+class _Ob11DataDict(TypedDict): ...
 
 
-_SegTypeT = TypeVar("_SegTypeT", bound=str)
-_SegDataT = TypeVar("_SegDataT", bound=_BaseTypedDict)
+_SegTypeT = TypeVar("_SegTypeT", bound=str, default=str)
+_SegDataT = TypeVar("_SegDataT", bound=_Ob11DataDict, default=_Ob11DataDict)
 
 
 def cq_filter_text(s: str) -> str:
@@ -78,56 +87,78 @@ def cq_anti_escape(text: str) -> str:
     )
 
 
-# def cq_to_segments(s: str) -> list[Segment]:
-#     """将 cq 字符串转换为消息段对象列表
+def _cq_to_dicts(s: str) -> list[dict[str, Any]]:
+    cq_texts: list[str] = []
 
-#     :param s: cq 字符串
-#     :return: 消息段对象列表
-#     """
+    def replace_func(m: Match) -> str:
+        s, e = m.regs[0]
+        cq_texts.append(m.string[s:e])
+        return "\u0000"
 
-#     cq_texts: list[str] = []
+    cq_regex = re.compile(r"\[CQ:.*?\]")
 
-#     def replace_func(m: Match) -> str:
-#         s, e = m.regs[0]
-#         cq_texts.append(m.string[s:e])
-#         return "\u0000"
+    no_cq_str = cq_regex.sub(replace_func, s)
+    pure_texts = map(
+        lambda x: f"[CQ:text,text={x}]" if x != "" else x,
+        no_cq_str.split("\u0000"),
+    )
+    cq_entity_str: str = "".join(
+        chain.from_iterable(zip_longest(pure_texts, cq_texts, fillvalue=""))
+    )
 
-#     cq_regex = re.compile(r"\[CQ:.*?\]")
+    cq_entity: list[str] = cq_entity_str.split("]")[:-1]
+    dicts: list[dict[str, Any]] = []
 
-#     no_cq_str = cq_regex.sub(replace_func, s)
-#     pure_texts = map(
-#         lambda x: f"[CQ:text,text={x}]" if x != "" else x,
-#         no_cq_str.split("\u0000"),
-#     )
-#     cq_entity_str: str = "".join(
-#         chain.from_iterable(zip_longest(pure_texts, cq_texts, fillvalue=""))
-#     )
+    for e in cq_entity:
+        cq_parts = e.split(",")
+        cq_type = cq_parts[0][4:]
+        cq_data: dict[str, Any] = {}
 
-#     cq_entity: list[str] = cq_entity_str.split("]")[:-1]
-#     segs: list[Segment] = []
+        for param_pair in cq_parts[1:]:
+            name, val = param_pair.split("=", maxsplit=1)
+            if len(cq_entity) == 1 and cq_type == "text":
+                cq_data[name] = val
+            else:
+                cq_data[name] = cq_anti_escape(val)
 
-#     for e in cq_entity:
-#         cq_parts = e.split(",")
-#         cq_type = cq_parts[0][4:]
-#         data: dict[str, float | int | str] = {}
+        if (
+            cq_type == "node"
+            and "content" in cq_data
+            and isinstance(cq_data["content"], str)
+        ):
+            cq_data["content"] = [
+                Segment.resolve(seg_dict["type"], seg_dict["data"])
+                for seg_dict in _cq_to_dicts(cq_data["content"])
+            ]
 
-#         for param_pair in cq_parts[1:]:
-#             name, val = param_pair.split("=")
+        dicts.append({"type": cq_type, "data": cq_data})
 
-#             if cq_type != "text":
-#                 val = cq_anti_escape(val)
+    return dicts
 
-#             try:
-#                 data[name] = float(val)
-#                 tmp = int(val)
-#                 if tmp == data[name]:
-#                     data[name] = tmp
-#             except Exception:
-#                 data[name] = val
 
-#         segs.append({"type": cq_type, "data": data})
+def _segment_to_cq(type: str, data: dict[str, Any]) -> str:
+    if type == "text":
+        return cast(str, data["text"])
 
-#     return segs
+    if type != "node":
+        params = ",".join(f"{k}={cq_escape(str(v))}" for k, v in data.items())
+    else:
+        param_list: list[str] = []
+        for k, v in data.items():
+            if k == "content":
+                inner_cq = "".join(
+                    _segment_to_cq(inner_seg.type, inner_seg.data) for inner_seg in v
+                )
+                param_list.append(f"{k}={cq_escape(inner_cq)}")
+            else:
+                param_list.append(f"{k}={cq_escape(str(v))}")
+        params = ",".join(param_list)
+
+    s = f"[CQ:{type}"
+    if params != "":
+        s += f",{params}"
+    s += "]"
+    return s
 
 
 class Segment(Generic[_SegTypeT, _SegDataT]):
@@ -136,43 +167,67 @@ class Segment(Generic[_SegTypeT, _SegDataT]):
         type: str
         data: dict
 
-    def __init__(self, seg_type: _SegTypeT, seg_data: _SegDataT) -> None:
+    __dynamic_segments__: dict[str, type[Segment]] = {}
+
+    def __init__(self, seg_type: _SegTypeT, **seg_data: Any) -> None:
         self._model = self.Model(
-            type=seg_type, data={k: v for k, v in seg_data.items() if v is not None}
+            type=seg_type,
+            data={k: v for k, v in seg_data.items() if v is not None},
         )
 
-    @staticmethod
-    def new_type(
+    @classmethod
+    @final
+    def add_type(
+        cls,
         seg_type_hint: type[T],
         seg_data_hint: type[V],
-    ) -> type[_CustomSegInterface[T, V]]:  # type: ignore[type-var]
+    ) -> type[_CustomSegment[T, V]]:  # type: ignore[type-var]
         if not is_subhint(seg_type_hint, Literal):
             raise ValueError("新消息段的类型标注必须为 Literal")
         if not is_subhint(seg_data_hint, TypedDict):
             raise ValueError("新消息段的类型标注必须为 TypedDict")
+
         hint_args = get_args(seg_type_hint)
         if len(hint_args) != 1:
             raise ValueError("新消息段的类型标注必须只有一个字面量")
-        type_v: str = hint_args[0]
 
-        seg_cls = _CustomSegmentMeta(
-            f"Dynamic_{type_v.capitalize()}_Segment",
+        type_name: str = hint_args[0]
+        stand_name = type_name.lower().capitalize()
+        type_classname = f"{stand_name}Segment"
+        type_dataname = f"_{stand_name}Data"
+
+        if type_classname in cls.__dynamic_segments__:
+            raise ValueError(f"类型为 {type_name} 的自定义消息段类型已经存在")
+
+        def __custom_seg_cls_init__(self: type, **data: Any) -> None:
+            setattr(
+                self,
+                "_model",
+                getattr(self, "Model")(
+                    type=getattr(self, "SegTypeVal"),
+                    data=data,
+                ),
+            )
+
+        seg_cls = type(
+            type_classname,
             (Segment,),
             {
                 "Model": create_model(
-                    f"_Dynamic_{type_v.capitalize()}_SegmentData",
+                    type_dataname,
                     type=(seg_type_hint, ...),
                     data=(seg_data_hint, ...),
                 ),
-                "SegTypeVal": type_v,
+                "SegTypeVal": type_name,
             },
         )
         setattr(
             seg_cls,
             "__init__",
-            partial(_CustomSegmentMeta.__custom_seg_cls_init__, seg_cls),
+            partial(__custom_seg_cls_init__, seg_cls),
         )
-        return cast(type[_CustomSegInterface[T, V]], seg_cls)  # type: ignore[type-var]
+        cls.__dynamic_segments__[type_classname] = seg_cls
+        return cast(type[_CustomSegment[T, V]], seg_cls)  # type: ignore[type-var]
 
     @property
     def type(self) -> _SegTypeT:
@@ -182,33 +237,55 @@ class Segment(Generic[_SegTypeT, _SegDataT]):
     def data(self) -> _SegDataT:
         return cast(_SegDataT, self._model.data)
 
-    @property
-    def cq_str(self) -> str:
-        if self._model.type == "text":
-            return cast(_TextData, self._model.data)["text"]
+    @classmethod
+    def resolve(
+        cls, seg_type: _SegTypeT, seg_data: _SegDataT
+    ) -> Segment[_SegTypeT, _SegDataT]:
+        cls_name = f"{seg_type.capitalize()}Segment"
+        cls_map = {subcls.__name__: subcls for subcls in cls.__subclasses__()}
+        if cls_name in cls_map:
+            return cls_map[cls_name].resolve(seg_type, seg_data)
+        if cls_name in cls.__dynamic_segments__:
+            return cast(
+                Self,
+                cls.__dynamic_segments__[cls_name].resolve(seg_type, seg_data),
+            )
+        return cls(seg_type, **seg_data)
 
-        params = ",".join(f"{k}={cq_escape(str(v))}" for k, v in self._model.data.items())
-        s = f"[CQ:{self._model.type}]"
-        if params != "":
-            s += f",{params}"
-        return s
+    @classmethod
+    def resolve_cq(cls, cq_str: str) -> list[Segment[_SegTypeT, _SegDataT]]:
+        dicts = _cq_to_dicts(cq_str)
+        segs = [cls.resolve(dic["type"], dic["data"]) for dic in dicts]
+        return segs
+
+    def to_cq(self) -> str:
+        return _segment_to_cq(self.type, cast(dict[str, Any], self.data))
+
+    def to_dict(self, force_str: bool = False) -> dict[str, Any]:
+        dic = self._model.model_dump()
+        if not force_str:
+            return dic
+
+        if self.type != "node":
+            for k, v in dic["data"].items():
+                dic["data"][k] = str(v)
+            return dic
+
+        if "content" in dic["data"]:
+            for inner_dict in dic["data"]["content"]:
+                for k, v in inner_dict["data"].items():
+                    inner_dict["data"][k] = str(v)
+        for k, v in dic["data"].items():
+            if k != "content":
+                dic["data"][k] = str(v)
+
+        return dic
+
+    def to_json(self, force_str: bool = False) -> str:
+        return json.dumps(self.to_dict(force_str), ensure_ascii=False)
 
 
-class _CustomSegmentMeta(type):
-    def __init__(cls, name: str, bases: tuple[type], attrs: dict[str, Any]) -> None:
-        super().__init__(name, bases, attrs)
-
-    @staticmethod
-    def __custom_seg_cls_init__(  # pylint: disable=bad-staticmethod-argument
-        self: type, **data: Any
-    ) -> None:
-        self._model = getattr(self, "Model")(  # type: ignore[attr-defined]
-            type=getattr(self, "SegTypeVal"),
-            data=data,
-        )
-
-
-class _CustomSegInterface(Segment[_SegTypeT, _SegDataT]):
+class _CustomSegment(Segment[_SegTypeT, _SegDataT]):
     def __init__(  # pylint: disable=super-init-not-called,unused-argument
         self, **data: Any
     ) -> None: ...
@@ -225,7 +302,17 @@ class TextSegment(Segment[Literal["text"], _TextData]):
         data: _TextData
 
     def __init__(self, text: str) -> None:
-        super().__init__("text", _TextData(text=text))
+        super().__init__("text", text=text)
+
+    @classmethod
+    def resolve(cls, seg_type: Literal["text"], seg_data: _TextData) -> Self:
+        return cls(**seg_data)
+
+    def to_cq(self, escape: bool = False) -> str:
+        text = super().to_cq()
+        if escape:
+            text = cq_escape(text)
+        return text
 
 
 class _FaceData(TypedDict):
@@ -239,7 +326,11 @@ class FaceSegment(Segment[Literal["face"], _FaceData]):
         data: _FaceData
 
     def __init__(self, id: int) -> None:
-        super().__init__("face", _FaceData(id=id))
+        super().__init__("face", id=id)
+
+    @classmethod
+    def resolve(cls, seg_type: Literal["face"], seg_data: _FaceData) -> Self:
+        return cls(**seg_data)
 
 
 class _ImageSendData(TypedDict):
@@ -279,7 +370,17 @@ class ImageSegment(Segment[Literal["image"], _ImageSendData | _ImageRecvData]):
     ) -> None: ...
 
     def __init__(self, **kv_pairs: Any) -> None:
-        super().__init__("image", cast(_ImageSendData | _ImageRecvData, kv_pairs))
+        super().__init__("image", **kv_pairs)
+
+    @classmethod
+    def resolve(
+        cls,
+        seg_type: Literal["image"],
+        seg_data: _ImageSendData | _ImageRecvData,
+    ) -> ImageSegment:
+        if "url" in seg_data:
+            return ImageRecvSegment(**seg_data)
+        return ImageSendSegment(**seg_data)
 
 
 class ImageSendSegment(ImageSegment):
@@ -343,7 +444,15 @@ class RecordSegment(Segment[Literal["record"], _RecordSendData | _RecordRecvData
     ) -> None: ...
 
     def __init__(self, **kv_pairs: Any) -> None:
-        super().__init__("record", cast(_RecordSendData | _RecordRecvData, kv_pairs))
+        super().__init__("record", **kv_pairs)
+
+    @classmethod
+    def resolve(
+        cls, seg_type: Literal["record"], seg_data: _RecordSendData | _RecordRecvData
+    ) -> RecordSegment:
+        if "url" in seg_data:
+            return RecordRecvSegment(**seg_data)
+        return RecordSendSegment(**seg_data)
 
 
 class RecordSendSegment(RecordSegment):
@@ -404,7 +513,15 @@ class VideoSegment(Segment[Literal["video"], _VideoSendData | _VideoRecvData]):
     def __init__(self, *, file: str, url: FileUrl) -> None: ...
 
     def __init__(self, **kv_pairs: Any) -> None:
-        super().__init__("video", cast(_VideoSendData | _VideoRecvData, kv_pairs))
+        super().__init__("video", **kv_pairs)
+
+    @classmethod
+    def resolve(
+        cls, seg_type: Literal["video"], seg_data: _VideoSendData | _VideoRecvData
+    ) -> VideoSegment:
+        if "url" in seg_data:
+            return VideoRecvSegment(**seg_data)
+        return VideoSendSegment(**seg_data)
 
 
 class VideoSendSegment(VideoSegment):
@@ -439,7 +556,11 @@ class AtSegment(Segment[Literal["at"], _AtData]):
         data: _AtData
 
     def __init__(self, qq: int | Literal["all"]) -> None:
-        super().__init__("at", _AtData(qq=qq))
+        super().__init__("at", qq=qq)
+
+    @classmethod
+    def resolve(cls, seg_type: Literal["at"], seg_data: _AtData) -> AtSegment:
+        return cls(**seg_data)
 
 
 class _RpsData(TypedDict): ...
@@ -452,7 +573,11 @@ class RpsSegment(Segment[Literal["rps"], _RpsData]):
         data: _RpsData
 
     def __init__(self) -> None:
-        super().__init__("rps", _RpsData())
+        super().__init__("rps")
+
+    @classmethod
+    def resolve(cls, seg_type: Literal["rps"], seg_data: _RpsData) -> RpsSegment:
+        return cls()
 
 
 class _DictData(TypedDict): ...
@@ -465,7 +590,11 @@ class DiceSegment(Segment[Literal["dice"], _DictData]):
         data: _DictData
 
     def __init__(self) -> None:
-        super().__init__("dice", _DictData())
+        super().__init__("dice")
+
+    @classmethod
+    def resolve(cls, seg_type: Literal["dice"], seg_data: _DictData) -> DiceSegment:
+        return cls()
 
 
 class _ShakeData(TypedDict): ...
@@ -478,7 +607,11 @@ class ShakeSegment(Segment[Literal["shake"], _ShakeData]):
         data: _ShakeData
 
     def __init__(self) -> None:
-        super().__init__("shake", _ShakeData())
+        super().__init__("shake")
+
+    @classmethod
+    def resolve(cls, seg_type: Literal["shake"], seg_data: _ShakeData) -> ShakeSegment:
+        return cls()
 
 
 class _PokeSendData(TypedDict):
@@ -505,7 +638,15 @@ class PokeSegment(Segment[Literal["poke"], _PokeSendData | _PokeRecvData]):
     def __init__(self, *, type: str, id: int, name: int) -> None: ...
 
     def __init__(self, **kv_pairs: Any) -> None:
-        super().__init__("poke", cast(_PokeSendData | _PokeRecvData, kv_pairs))
+        super().__init__("poke", **kv_pairs)
+
+    @classmethod
+    def resolve(
+        cls, seg_type: Literal["poke"], seg_data: _PokeSendData | _PokeRecvData
+    ) -> PokeSegment:
+        if "name" in seg_data:
+            return PokeRecvSegment(**seg_data)  # type: ignore[call-arg]
+        return PokeSendSegment(**seg_data)
 
 
 class PokeSendSegment(PokeSegment):
@@ -533,7 +674,13 @@ class AnonymousSegment(Segment[Literal["anonymous"], _AnonymousData]):
         data: _AnonymousData
 
     def __init__(self, ignore: Literal[0, 1] | None = None) -> None:
-        super().__init__("anonymous", cast(_AnonymousData, {"ignore": ignore}))
+        super().__init__("anonymous", ignore=ignore)
+
+    @classmethod
+    def resolve(
+        cls, seg_type: Literal["anonymous"], seg_data: _AnonymousData
+    ) -> AnonymousSegment:
+        return cls(**seg_data)
 
 
 class _ShareData(TypedDict):
@@ -550,9 +697,11 @@ class ShareSegment(Segment[Literal["share"], _ShareData]):
         data: _ShareData
 
     def __init__(self, url: AnyUrl, title: str, content: str, image: AnyHttpUrl) -> None:
-        super().__init__(
-            "share", _ShareData(url=url, title=title, content=content, image=image)
-        )
+        super().__init__("share", url=url, title=title, content=content, image=image)
+
+    @classmethod
+    def resolve(cls, seg_type: Literal["share"], seg_data: _ShareData) -> ShareSegment:
+        return cls(**seg_data)
 
 
 class _ContactFriendData(TypedDict):
@@ -572,10 +721,17 @@ class ContactSegment(Segment[Literal["contact"], _ContactFriendData | _ContactGr
         data: _ContactFriendData | _ContactGroupData
 
     def __init__(self, type: Literal["qq", "group"], id: int) -> None:
-        super().__init__(
-            "contact",
-            cast(_ContactFriendData | _ContactGroupData, {"type": type, "id": id}),
-        )
+        super().__init__("contact", type=type, id=id)
+
+    @classmethod
+    def resolve(
+        cls,
+        seg_type: Literal["contact"],
+        seg_data: _ContactFriendData | _ContactGroupData,
+    ) -> ContactSegment:
+        if seg_data["type"] == "qq":
+            return ContactFriendSegment(**seg_data)  # type:ignore[misc]
+        return ContactGroupSegment(**seg_data)  # type:ignore[misc]
 
 
 class ContactFriendSegment(ContactSegment):
@@ -608,13 +764,13 @@ class LocationSegment(Segment[Literal["location"], _LocationData]):
     def __init__(
         self, lat: float, lon: float, title: str | None = None, content: str | None = None
     ) -> None:
-        super().__init__(
-            "location",
-            cast(
-                _LocationData,
-                {"lat": lat, "lon": lon, "title": title, "content": content},
-            ),
-        )
+        super().__init__("location", lat=lat, lon=lon, title=title, content=content)
+
+    @classmethod
+    def resolve(
+        cls, seg_type: Literal["location"], seg_data: _LocationData
+    ) -> LocationSegment:
+        return cls(**seg_data)
 
 
 class _MusicData(TypedDict):
@@ -653,7 +809,15 @@ class MusicSegment(Segment[Literal["music"], _MusicData | _MusicCustomData]):
     ) -> None: ...
 
     def __init__(self, **kv_pairs: Any) -> None:
-        super().__init__("music", cast(_MusicData | _MusicCustomData, kv_pairs))
+        super().__init__("music", **kv_pairs)
+
+    @classmethod
+    def resolve(
+        cls, seg_type: Literal["music"], seg_data: _MusicData | _MusicCustomData
+    ) -> MusicSegment:
+        if seg_data["type"] == "custom":
+            return MusicCustomSegment(**seg_data)
+        return MusicPlatformSegment(**seg_data)
 
 
 class MusicPlatformSegment(MusicSegment):
@@ -692,7 +856,11 @@ class ReplySegment(Segment[Literal["reply"], _ReplyData]):
         data: _ReplyData
 
     def __init__(self, id: str) -> None:
-        super().__init__("reply", _ReplyData(id=id))
+        super().__init__("reply", id=id)
+
+    @classmethod
+    def resolve(cls, seg_type: Literal["reply"], seg_data: _ReplyData) -> ReplySegment:
+        return cls(**seg_data)
 
 
 class _ForwardData(TypedDict):
@@ -706,7 +874,13 @@ class ForwardSegment(Segment[Literal["forward"], _ForwardData]):
         data: _ForwardData
 
     def __init__(self, id: str) -> None:
-        super().__init__("forward", _ForwardData(id=id))
+        super().__init__("forward", id=id)
+
+    @classmethod
+    def resolve(
+        cls, seg_type: Literal["forward"], seg_data: _ForwardData
+    ) -> ForwardSegment:
+        return cls(**seg_data)
 
 
 class _NodeReferData(TypedDict):
@@ -731,7 +905,14 @@ class NodeSegment(
 
     class Model(BaseModel):
         type: Literal["node"]
-        data: _NodeReferData | _NodeStdCustomData | _NodeGocqCustomData
+        data: Annotated[
+            Annotated[_NodeReferData, Tag("0")]
+            | Annotated[_NodeStdCustomData, Tag("1")]
+            | Annotated[_NodeGocqCustomData, Tag("2")],
+            Discriminator(
+                lambda data: "0" if "id" in data else "1" if "user_id" in data else "2"
+            ),
+        ]
 
     @overload
     def __init__(self, *, id: str) -> None: ...
@@ -743,28 +924,36 @@ class NodeSegment(
 
     def __init__(self, **kv_pairs: Any) -> None:
         std: bool = kv_pairs.pop("use_std")
-        id: str | None = kv_pairs.pop("id")
+        id: str | None = kv_pairs.pop("id", None)
 
         if id:
-            super().__init__("node", _NodeReferData(id=id))
+            super().__init__("node", id=id)
         if not std:
             super().__init__(
                 "node",
-                _NodeGocqCustomData(
-                    uin=kv_pairs["uin"],
-                    name=kv_pairs["name"],
-                    content=[seg._model for seg in kv_pairs["content"]],
-                ),
+                uin=kv_pairs["uin"],
+                name=kv_pairs["name"],
+                content=[seg._model.model_dump() for seg in kv_pairs["content"]],
             )
         else:
             super().__init__(
                 "node",
-                _NodeStdCustomData(
-                    user_id=kv_pairs["uin"],
-                    nickname=kv_pairs["name"],
-                    content=[seg._model for seg in kv_pairs["content"]],
-                ),
+                user_id=kv_pairs["uin"],
+                nickname=kv_pairs["name"],
+                content=[seg._model.model_dump() for seg in kv_pairs["content"]],
             )
+
+    @classmethod
+    def resolve(
+        cls,
+        seg_type: Literal["node"],
+        seg_data: _NodeReferData | _NodeStdCustomData | _NodeGocqCustomData,
+    ) -> NodeSegment:
+        if "id" in seg_data:
+            return NodeReferSegment(**seg_data)
+        if "user_id" in seg_data:
+            return NodeStdCustomSegment(**seg_data)  # type: ignore[arg-type]
+        return NodeGocqCustomSegment(**seg_data)  # type: ignore[arg-type]
 
 
 class NodeReferSegment(NodeSegment):
@@ -799,7 +988,11 @@ class XmlSegment(Segment[Literal["xml"], _XmlData]):
         data: _XmlData
 
     def __init__(self, data: str) -> None:
-        super().__init__("xml", _XmlData(data=data))
+        super().__init__("xml", data=data)
+
+    @classmethod
+    def resolve(cls, seg_type: Literal["xml"], seg_data: _XmlData) -> XmlSegment:
+        return cls(**seg_data)
 
 
 class _JsonData(TypedDict):
@@ -813,4 +1006,8 @@ class JsonSegment(Segment[Literal["json"], _JsonData]):
         data: _JsonData
 
     def __init__(self, data: str) -> None:
-        super().__init__("json", _JsonData(data=data))
+        super().__init__("json", data=data)
+
+    @classmethod
+    def resolve(cls, seg_type: Literal["json"], seg_data: _JsonData) -> JsonSegment:
+        return cls(**seg_data)
