@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import warnings
 from functools import partial
 from itertools import chain, zip_longest
 from typing import (
@@ -266,20 +267,8 @@ class Segment(Generic[_SegTypeT, _SegDataT]):
         if not force_str:
             return dic
 
-        if self.type != "node":
-            for k, v in dic["data"].items():
-                dic["data"][k] = str(v)
-            return dic
-
-        if "content" in dic["data"]:
-            for inner_dict in dic["data"]["content"]:
-                for k, v in inner_dict["data"].items():
-                    inner_dict["data"][k] = str(v)
-
         for k, v in dic["data"].items():
-            if k != "content":
-                dic["data"][k] = str(v)
-
+            dic["data"][k] = str(v)
         return dic
 
     def to_json(self, force_str: bool = False) -> str:
@@ -891,17 +880,26 @@ class _NodeReferData(TypedDict):
 class _NodeStdCustomData(TypedDict):
     user_id: int
     nickname: str
-    content: list[Segment.Model]
+
+
+class _NodeStdCustomDataInterface(_NodeStdCustomData):
+    content: list[Segment]
 
 
 class _NodeGocqCustomData(TypedDict):
     uin: int
     name: str
-    content: list[Segment.Model]
+
+
+class _NodeGocqCustomDataInterface(_NodeGocqCustomData):
+    content: list[Segment]
 
 
 class NodeSegment(
-    Segment[Literal["node"], _NodeReferData | _NodeStdCustomData | _NodeGocqCustomData]
+    Segment[
+        Literal["node"],
+        _NodeReferData | _NodeStdCustomDataInterface | _NodeGocqCustomDataInterface,
+    ]
 ):
 
     class Model(BaseModel):
@@ -920,41 +918,68 @@ class NodeSegment(
 
     @overload
     def __init__(
-        self, *, uin: int, name: str, content: list[Segment], use_std: bool = False
+        self,
+        *,
+        uin: int,
+        name: str,
+        content: list[Segment] | list[dict],
+        use_std: bool = False,
     ) -> None: ...
 
     def __init__(self, **kv_pairs: Any) -> None:
         std: bool = kv_pairs.pop("use_std")
         id: str | None = kv_pairs.pop("id", None)
+        content = kv_pairs.pop("content")
+        _content: list[Segment]
+        if len(content) and isinstance(content[0], dict):
+            _content = [
+                Segment.resolve(seg_dic["type"], seg_dic["data"]) for seg_dic in content
+            ]
+        else:
+            _content = content
 
         if id:
             super().__init__("node", id=id)
+            return
+
         if not std:
-            super().__init__(
-                "node",
-                uin=kv_pairs["uin"],
-                name=kv_pairs["name"],
-                content=[seg._model.model_dump() for seg in kv_pairs["content"]],
-            )
+            super().__init__("node", uin=kv_pairs["uin"], name=kv_pairs["name"])
         else:
-            super().__init__(
-                "node",
-                user_id=kv_pairs["uin"],
-                nickname=kv_pairs["name"],
-                content=[seg._model.model_dump() for seg in kv_pairs["content"]],
-            )
+            super().__init__("node", user_id=kv_pairs["uin"], nickname=kv_pairs["name"])
+        self.data["content"] = _content  # type: ignore[typeddict-unknown-key]
 
     @classmethod
     def resolve(
         cls,
         seg_type: Literal["node"],
-        seg_data: _NodeReferData | _NodeStdCustomData | _NodeGocqCustomData,
+        seg_data: (
+            _NodeReferData | _NodeStdCustomDataInterface | _NodeGocqCustomDataInterface
+        ),
     ) -> NodeSegment:
         if "id" in seg_data:
             return NodeReferSegment(**seg_data)
         if "user_id" in seg_data:
             return NodeStdCustomSegment(**seg_data)  # type: ignore[arg-type]
         return NodeGocqCustomSegment(**seg_data)  # type: ignore[arg-type]
+
+    def to_dict(self, force_str: bool = False) -> dict[str, Any]:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", UserWarning)
+            dic = super().to_dict(force_str)
+
+        if "content" in self.data:
+            dic["data"]["content"] = [
+                s.to_dict(force_str) for s in self.data["content"]  # type: ignore[typeddict-item]
+            ]
+
+        if not force_str:
+            return dic
+
+        for k, v in dic["data"].items():
+            if k != "content":
+                dic["data"][k] = str(v)
+
+        return dic
 
 
 class NodeReferSegment(NodeSegment):
@@ -968,14 +993,14 @@ class NodeStdCustomSegment(NodeSegment):
     def __init__(self, user_id: int, nickname: str, content: list[Segment]) -> None:
         super().__init__(uin=user_id, name=nickname, content=content, use_std=True)
 
-    data: _NodeStdCustomData
+    data: _NodeStdCustomDataInterface
 
 
 class NodeGocqCustomSegment(NodeSegment):
     def __init__(self, uin: int, name: str, content: list[Segment]) -> None:
         super().__init__(uin=uin, name=name, content=content, use_std=False)
 
-    data: _NodeGocqCustomData
+    data: _NodeGocqCustomDataInterface
 
 
 class _XmlData(TypedDict):
