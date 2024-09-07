@@ -3,16 +3,16 @@ from typing import Literal
 from pydantic import ValidationError
 from typing_extensions import TypedDict, reveal_type
 
-from melobot_protocol_onebot.v11.adapter import msg
+from melobot_protocol_onebot.v11.adapter import segment as seg
 from tests.base import *
 
 
 async def test_smart_union():
-    s = msg.ImageSegment(file="12345678")
-    s = msg.ImageSegment(file="12345678.jpg", url="https://example.com/12345678.jpg")
-    s = msg.ContactSegment(type="qq", id=12345678)
-    s = msg.ContactSegment(type="group", id=12345678)
-    s = msg.MusicSegment(
+    s = seg.ImageSegment(file="12345678")
+    s = seg.ImageSegment(file="12345678.jpg", url="https://example.com/12345678.jpg")
+    s = seg.ContactSegment(type="qq", id=12345678)
+    s = seg.ContactSegment(type="group", id=12345678)
+    s = seg.MusicSegment(
         type="custom",
         url="https://example.com/music.mp3",
         audio="https://example.com/audio.mp3",
@@ -21,31 +21,35 @@ async def test_smart_union():
 
 
 async def test_type_and_data():
-    s = msg.Segment("my", key="123")
+    s = seg.Segment("my", key="123")
     assert s.type == "my"
     assert s.data == {"key": "123"}
 
 
 async def test_add_type():
-    SType = msg.Segment.add_type(Literal["MyS"], TypedDict("MyData", {"key": str}))
+    SType = seg.Segment.add_type(Literal["MyS"], TypedDict("MyData", {"key": str}))
     s = SType(key="123")
     assert s.type == "MyS"
     assert s.data == {"key": "123"}
-    assert SType.__name__ in msg.Segment.__dynamic_segments__
+    assert SType.__name__ in seg.Segment.__dynamic_segments__
     with pt.raises(ValidationError):
         SType(key=123)
 
 
 async def test_serialize_and_deserialize():
-    sl1 = msg.Segment.resolve_cq("12345[CQ:image,file=12345678.jpg]123456")
-    sl2 = msg.Segment.resolve_cq(
+    sl1 = seg.Segment.resolve_cq("12345[CQ:image,file=12345678.jpg]123456")
+    sl2 = seg.Segment.resolve_cq(
         "123&#91;45[CQ:node,user_id=10001000,nickname=某人,content=&#91;CQ:face&#44;id=123&#93;哈喽～]12345"
     )
-    s3 = msg.ImageSegment(file="12345678")
-    s4 = msg.RpsSegment()
-    s5 = msg.Segment.resolve_cq("12345")[0]
-    s6 = msg.Segment.resolve_cq("[CQ:image,file=12345678.jpg]")[0]
-    s7 = msg.AtSegment(15742)
+
+    s3 = seg.ImageSegment(file="12345678")
+    s4 = seg.RpsSegment()
+    s5 = seg.Segment.resolve_cq("12345")[0]
+    s6 = seg.Segment.resolve_cq("[CQ:image,file=12345678.jpg]")[0]
+    s7 = seg.AtSegment(15742)
+    s8 = seg.Segment.resolve_cq("")
+
+    assert s8 == []
 
     assert sl1[0].to_dict() == {"type": "text", "data": {"text": "12345"}}
     assert sl1[1].to_dict() == {"type": "image", "data": {"file": "12345678.jpg"}}

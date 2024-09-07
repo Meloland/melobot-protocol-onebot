@@ -39,8 +39,8 @@ FileUrl: TypeAlias = Annotated[
 class _Ob11DataDict(TypedDict): ...
 
 
-_SegTypeT = TypeVar("_SegTypeT", bound=str, default=str)
-_SegDataT = TypeVar("_SegDataT", bound=_Ob11DataDict, default=_Ob11DataDict)
+_SegTypeT = TypeVar("_SegTypeT", bound=str)
+_SegDataT = TypeVar("_SegDataT", bound=_Ob11DataDict)
 
 
 def cq_filter_text(s: str) -> str:
@@ -262,7 +262,7 @@ class Segment(Generic[_SegTypeT, _SegDataT]):
         return _segment_to_cq(self.type, cast(dict[str, Any], self.data))
 
     def to_dict(self, force_str: bool = False) -> dict[str, Any]:
-        dic = self._model.model_dump()
+        dic: dict[str, Any] = self._model.model_dump()
         if not force_str:
             return dic
 
@@ -275,6 +275,7 @@ class Segment(Generic[_SegTypeT, _SegDataT]):
             for inner_dict in dic["data"]["content"]:
                 for k, v in inner_dict["data"].items():
                     inner_dict["data"][k] = str(v)
+
         for k, v in dic["data"].items():
             if k != "content":
                 dic["data"][k] = str(v)
