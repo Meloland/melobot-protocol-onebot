@@ -5,3 +5,5 @@ V = TypeVar("V")
 P = ParamSpec("P")
 
 PROTOCOL_IDENTIFIER = "onebot-v11"
+PROTOCOL_NAME = "OneBot"
+PROTOCOL_VERSION = "11"
