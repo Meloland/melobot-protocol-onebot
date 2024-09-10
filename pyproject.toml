@@ -12,7 +12,8 @@ dependencies = [
     "melobot==3.0.0rc3",
     "pydantic>=2.8.2,<3",
     "typing-extensions>=4.12.2",
-    "beartype>=0.18.5",
+    "websockets>=13.0.1",
+    "aiohttp>=3.10.5",
 ]
 requires-python = ">=3.10"
 readme = "README.md"
@@ -66,17 +67,17 @@ line_length = 90
 distribution = true
 
 [tool.pdm.scripts]
-fresh = {call = "fresh_proj_depends:main"}
 isort = {shell = "isort src/melobot_protocol_onebot"}
 format = {shell = "black src/melobot_protocol_onebot"}
 check = {shell = "flake8 src/melobot_protocol_onebot"}
 analyse = {shell = "mypy src/melobot_protocol_onebot"}
 pylint = {shell = "pylint src/melobot_protocol_onebot"}
-all_lint = {shell = "isort src/melobot_protocol_onebot && black src/melobot_protocol_onebot && flake8 src/melobot_protocol_onebot && mypy src/melobot_protocol_onebot && pylint src/melobot_protocol_onebot"}
+all_lint = {composite = ["isort", "format", "check", "analyse", "pylint"]}
 test = {shell = "pytest -c pytest.ini"}
 trace = {shell = "viztracer"}
 deps = {shell = "pydeps src/melobot_protocol_onebot -o pydeps.png -T png --only melobot_protocol_onebot --rankdir BT --max-module-depth 2 --start-color 160"}
 docs = {call = "docs.make:main"}
+post_install = {call = "scripts.export_requires:main"}
 
 [tool.pdm.dev-dependencies]
 test = [
