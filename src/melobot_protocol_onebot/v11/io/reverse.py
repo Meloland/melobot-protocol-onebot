@@ -6,10 +6,12 @@ from asyncio import Future
 from typing import Callable
 
 import websockets
+import websockets.server
 from melobot.io import AbstractIOSource
 from melobot.log import LogLevel, get_logger
 from websockets import ConnectionClosed
 
+from ..const import PROTOCOL_IDENTIFIER
 from .packet import EchoPacket, InPacket, OutPacket
 
 
@@ -17,7 +19,7 @@ class ReverseWebSocketIO(AbstractIOSource[InPacket, OutPacket, EchoPacket]):
     def __init__(
         self, host: str, port: int, cd_time: float = 0.2, access_token: str | None = None
     ) -> None:
-        super().__init__()
+        super().__init__(PROTOCOL_IDENTIFIER)
         self.host = host
         self.port = port
         self.conn: websockets.server.WebSocketServerProtocol
@@ -26,6 +28,7 @@ class ReverseWebSocketIO(AbstractIOSource[InPacket, OutPacket, EchoPacket]):
         self.cd_time = cd_time
         self.logger = get_logger()
 
+        self._tasks: list[asyncio.Task] = []
         self._in_buf: asyncio.Queue[InPacket] = asyncio.Queue()
         self._out_buf: asyncio.Queue[OutPacket] = asyncio.Queue()
         self._echo_table: dict[str, Future[EchoPacket]] = {}
@@ -69,7 +72,7 @@ class ReverseWebSocketIO(AbstractIOSource[InPacket, OutPacket, EchoPacket]):
 
         while True:
             try:
-                raw_str = self.conn.recv()
+                raw_str = await self.conn.recv()
                 self.logger.generic_obj(
                     "收到上报，未格式化的字符串", raw_str, level=LogLevel.DEBUG
                 )
@@ -83,9 +86,9 @@ class ReverseWebSocketIO(AbstractIOSource[InPacket, OutPacket, EchoPacket]):
 
                 self._echo_table.pop(raw["echo"]).set_result(
                     EchoPacket(
-                        time=raw["time"],
+                        time=int(time.time()),
                         data=raw["data"],
-                        ok=raw["ok"] == "ok",
+                        ok=raw["status"] == "ok",
                         status=raw["retcode"],
                     )
                 )
@@ -117,7 +120,7 @@ class ReverseWebSocketIO(AbstractIOSource[InPacket, OutPacket, EchoPacket]):
         self.server = await websockets.serve(
             self._input_loop, self.host, self.port, process_request=self._req_check
         )
-        asyncio.create_task(self._output_loop())
+        self._tasks.append(asyncio.create_task(self._output_loop()))
         self.logger.info("OneBot v11 反向 WebSocket IO 源启动了服务，等待连接中")
         await self._opened.wait()
 
@@ -128,6 +131,9 @@ class ReverseWebSocketIO(AbstractIOSource[InPacket, OutPacket, EchoPacket]):
         if self.opened():
             await self.server.close()
             await self.server.wait_closed()
+            for t in self._tasks:
+                t.cancel()
+
             self._opened.clear()
             self.logger.info("OneBot v11 反向 WebSocket IO 源已停止运行")
 

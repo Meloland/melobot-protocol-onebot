@@ -9,6 +9,7 @@ from melobot.io import AbstractIOSource
 from melobot.log import LogLevel, get_logger
 from websockets.exceptions import ConnectionClosed
 
+from ..const import PROTOCOL_IDENTIFIER
 from .packet import EchoPacket, InPacket, OutPacket
 
 
@@ -20,18 +21,17 @@ class ForwardWebSocketIO(AbstractIOSource[InPacket, OutPacket, EchoPacket]):
         retry_delay: float = 4.0,
         cd_time: float = 0.2,
         access_token: str | None = None,
-        reconnect: bool = False,
     ) -> None:
-        super().__init__()
+        super().__init__(PROTOCOL_IDENTIFIER)
         self.url = url
         self.conn: websockets.client.WebSocketClientProtocol
         self.access_token = access_token
         self.cd_time = cd_time
-        self.allow_reconn = reconnect
         self.max_retry: int = max_retry
         self.retry_delay: float = retry_delay if retry_delay > 0 else 0
         self.logger = get_logger()
 
+        self._tasks: list[asyncio.Task] = []
         self._in_buf: asyncio.Queue[InPacket] = asyncio.Queue()
         self._out_buf: asyncio.Queue[OutPacket] = asyncio.Queue()
         self._echo_table: dict[str, Future[EchoPacket]] = {}
@@ -55,9 +55,9 @@ class ForwardWebSocketIO(AbstractIOSource[InPacket, OutPacket, EchoPacket]):
 
                 self._echo_table.pop(raw["echo"]).set_result(
                     EchoPacket(
-                        time=raw["time"],
+                        time=int(time.time()),
                         data=raw["data"],
-                        ok=raw["ok"] == "ok",
+                        ok=raw["status"] == "ok",
                         status=raw["retcode"],
                     )
                 )
@@ -112,8 +112,8 @@ class ForwardWebSocketIO(AbstractIOSource[InPacket, OutPacket, EchoPacket]):
         if not ok_flag:
             raise RuntimeError("重试已达最大次数，已放弃建立连接")
 
-        asyncio.create_task(self._input_loop())
-        asyncio.create_task(self._output_loop())
+        self._tasks.append(asyncio.create_task(self._input_loop()))
+        self._tasks.append(asyncio.create_task(self._output_loop()))
         self._opened = True
         self.logger.info("OneBot v11 正向 WebSocket IO 源已连接实现端")
 
@@ -125,6 +125,9 @@ class ForwardWebSocketIO(AbstractIOSource[InPacket, OutPacket, EchoPacket]):
             self.conn.close_timeout = 2
             await self.conn.close()
             await self.conn.wait_closed()
+            for t in self._tasks:
+                t.cancel()
+
             self._opened = False
             self.logger.info("OneBot v11 正向 WebSocket IO 源已停止运行")
 

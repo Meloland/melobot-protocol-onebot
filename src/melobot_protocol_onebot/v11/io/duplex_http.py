@@ -10,6 +10,7 @@ import aiohttp.web
 from melobot.io import AbstractIOSource
 from melobot.log import LogLevel, get_logger
 
+from ..const import PROTOCOL_IDENTIFIER
 from .packet import EchoPacket, InPacket, OutPacket
 
 
@@ -24,7 +25,7 @@ class HttpIO(AbstractIOSource[InPacket, OutPacket, EchoPacket]):
         access_token: str | None = None,
         cd_time: float = 0.2,
     ) -> None:
-        super().__init__()
+        super().__init__(PROTOCOL_IDENTIFIER)
         self.onebot_url = f"http://{onebot_host}:{onebot_port}"
         self.host: str = serve_host
         self.port: int = serve_port
@@ -35,6 +36,7 @@ class HttpIO(AbstractIOSource[InPacket, OutPacket, EchoPacket]):
         self.cd_time = cd_time
         self.logger = get_logger()
 
+        self._tasks: list[asyncio.Task] = []
         self._in_buf: asyncio.Queue[InPacket] = asyncio.Queue()
         self._out_buf: asyncio.Queue[OutPacket] = asyncio.Queue()
         self._echo_table: dict[str, Future[EchoPacket]] = {}
@@ -42,6 +44,9 @@ class HttpIO(AbstractIOSource[InPacket, OutPacket, EchoPacket]):
         self._pre_send_time = time.time_ns()
 
     async def _respond(self, request: aiohttp.web.Request) -> aiohttp.web.Response:
+        if not self._opened.is_set():
+            self._opened.set()
+
         data = await request.content.read()
         if data == b"":
             return aiohttp.web.Response(status=400)
@@ -101,9 +106,9 @@ class HttpIO(AbstractIOSource[InPacket, OutPacket, EchoPacket]):
             raw = await http_resp.json()
             self._echo_table.pop(raw["echo"]).set_result(
                 EchoPacket(
-                    time=raw["time"],
+                    time=int(time.time()),
                     data=raw["data"],
-                    ok=raw["ok"] == "ok",
+                    ok=raw["status"] == "ok",
                     status=raw["retcode"],
                 )
             )
@@ -125,7 +130,7 @@ class HttpIO(AbstractIOSource[InPacket, OutPacket, EchoPacket]):
         await runner.setup()
         self.serve_site = aiohttp.web.TCPSite(runner, self.host, self.port)
         await self.serve_site.start()
-        await asyncio.create_task(self._output_loop())
+        self._tasks.append(asyncio.create_task(self._output_loop()))
 
         self.logger.info("OneBot v11 HTTP IO 源就绪，等待实现端上线中")
         await self._opened.wait()
@@ -138,6 +143,9 @@ class HttpIO(AbstractIOSource[InPacket, OutPacket, EchoPacket]):
         if self.opened():
             await self.serve_site.stop()
             await self.client_session.close()
+            for t in self._tasks:
+                t.cancel()
+
             self._opened.clear()
             self.logger.info("OneBot v11 HTTP IO 源已停止运行")
 
