@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 import warnings
+from collections.abc import Mapping
 from functools import partial
 from itertools import chain, zip_longest
 from typing import (
@@ -37,11 +38,8 @@ FileUrl: TypeAlias = Annotated[
 ]
 
 
-class _Ob11DataDict(TypedDict): ...
-
-
-_SegTypeT = TypeVar("_SegTypeT", bound=str)
-_SegDataT = TypeVar("_SegDataT", bound=_Ob11DataDict)
+_SegTypeT = TypeVar("_SegTypeT", bound=str, default=Any)
+_SegDataT = TypeVar("_SegDataT", bound=Mapping[str, Any], default=Any)
 
 
 def cq_filter_text(s: str) -> str:
@@ -239,9 +237,7 @@ class Segment(Generic[_SegTypeT, _SegDataT]):
         return cast(_SegDataT, self._model.data)
 
     @classmethod
-    def resolve(
-        cls, seg_type: _SegTypeT, seg_data: _SegDataT
-    ) -> Segment[_SegTypeT, _SegDataT]:
+    def resolve(cls, seg_type: Any, seg_data: Any) -> Segment:
         cls_name = f"{seg_type.capitalize()}Segment"
         cls_map = {subcls.__name__: subcls for subcls in cls.__subclasses__()}
         if cls_name in cls_map:
@@ -254,7 +250,7 @@ class Segment(Generic[_SegTypeT, _SegDataT]):
         return cls(seg_type, **seg_data)
 
     @classmethod
-    def resolve_cq(cls, cq_str: str) -> list[Segment[_SegTypeT, _SegDataT]]:
+    def resolve_cq(cls, cq_str: str) -> list[Segment]:
         dicts = _cq_to_dicts(cq_str)
         segs = [cls.resolve(dic["type"], dic["data"]) for dic in dicts]
         return segs

@@ -58,7 +58,7 @@ class HttpIO(AbstractIOSource[InPacket, OutPacket, EchoPacket]):
             if sign != recv_sign:
                 self.logger.error("OneBot 实现程序鉴权不通过，本次上报数据将不会被处理")
                 self.logger.generic_obj("试图上报的数据", data, level=LogLevel.ERROR)
-                return
+                return aiohttp.web.Response(status=403)
 
         try:
             raw = json.loads(data.decode())

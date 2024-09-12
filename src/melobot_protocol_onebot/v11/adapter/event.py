@@ -71,8 +71,8 @@ class MessageEvent(Event):
 
         self._model: MessageEvent.Model
         self.message: list[Segment]
-        self.sender: _MessageSender
-        self.contents: Sequence[content.AbstractContent] = []
+        self.sender: _MessageSender | _GroupMessageSender
+        self.contents: Sequence[content.Content] = []
 
         data = event_data
         if isinstance(data["message"], str):
@@ -110,6 +110,15 @@ class MessageEvent(Event):
         return "\n".join(
             seg.data["text"] for seg in self.message if isinstance(seg, TextSegment)
         )
+
+    def get_segments(self, type: type[Segment] | str) -> list[Segment]:
+        if isinstance(type, str):
+            return [seg for seg in self.message if seg.type == type]
+        return [seg for seg in self.message if isinstance(seg, type)]
+
+    def get_datas(self, type: type[Segment] | str, name: str) -> list[Any]:
+        segs = self.get_segments(type)
+        return [seg.data.get(name, None) for seg in segs]
 
     def is_private(self) -> bool:
         """是否为私聊消息（注意群临时会话属于该类别）"""
@@ -209,6 +218,7 @@ class PrivateMessageEvent(MessageEvent):
     def __init__(self, **event_data: Any) -> None:
         super().__init__(**event_data)
 
+        self.sender: _MessageSender
         self.sender = _MessageSender(**event_data["sender"])
 
         self._model: PrivateMessageEvent.Model
@@ -261,12 +271,14 @@ class GroupMessageEvent(MessageEvent):
     def __init__(self, **event_data: Any) -> None:
         super().__init__(**event_data)
 
+        self.sender: _GroupMessageSender
         self.sender = _GroupMessageSender(**event_data["sender"])
         self.anonymous = (
             _MessageAnonymous(**event_data["anonymous"])
             if event_data["anonymous"]
             else None
         )
+        self.group_id = self._model.group_id
 
         self._model: GroupMessageEvent.Model
         self.message_type: Literal["group"]

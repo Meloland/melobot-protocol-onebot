@@ -40,6 +40,8 @@ class ReverseWebSocketIO(AbstractIOSource[InPacket, OutPacket, EchoPacket]):
     async def _req_check(
         self, _: str, headers: websockets.HeadersLike
     ) -> tuple[http.HTTPStatus, websockets.HeadersLike, bytes] | None:
+        _headers = dict(headers)
+
         resp_403: Callable[[str], tuple[http.HTTPStatus, list, bytes]] = lambda x: (
             http.HTTPStatus.FORBIDDEN,
             [],
@@ -57,7 +59,7 @@ class ReverseWebSocketIO(AbstractIOSource[InPacket, OutPacket, EchoPacket]):
 
             if (
                 self.access_token is not None
-                and headers.get("Authorization") != f"Bearer {self.access_token}"
+                and _headers.get("Authorization") != f"Bearer {self.access_token}"
             ):
                 self.logger.warning("OneBot 实现端的 access_token 不匹配，拒绝连接")
                 return resp_403(auth_failed)
@@ -129,7 +131,7 @@ class ReverseWebSocketIO(AbstractIOSource[InPacket, OutPacket, EchoPacket]):
 
     async def close(self) -> None:
         if self.opened():
-            await self.server.close()
+            await self.server.close()  # type: ignore[func-returns-value]
             await self.server.wait_closed()
             for t in self._tasks:
                 t.cancel()
