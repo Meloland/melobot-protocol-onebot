@@ -9,7 +9,7 @@ maintainers = [
     {name = "aicorein", email = "aicorein@meloland.org"}
 ]
 dependencies = [
-    "melobot==3.0.0rc3",
+    "melobot==3.0.0rc4",
     "pydantic>=2.8.2,<3",
     "typing-extensions>=4.12.2",
     "websockets>=13.0.1",
