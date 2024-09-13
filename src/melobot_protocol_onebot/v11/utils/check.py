@@ -68,12 +68,16 @@ class MsgChecker(BotChecker[MessageEvent]):
             return User.WHITE
         return User.NORMAL
 
-    async def check(self, event: MessageEvent) -> bool:
+    def _check(self, event: MessageEvent) -> bool:
         if not event.is_message():
             return False
 
         e_level = self._get_level(event)
-        status = 0 < e_level.value and e_level.value >= self.check_lvl.value
+        status = User.BLACK < e_level.value and e_level.value >= self.check_lvl.value
+        return status
+
+    async def check(self, event: MessageEvent) -> bool:
+        status = self._check(event)
 
         if status and self.ok_cb is not None:
             await self.ok_cb()
@@ -118,7 +122,7 @@ class GroupMsgChecker(MsgChecker):
         )
         self.white_group_list = white_groups if white_groups is not None else []
 
-    async def check(self, event: MessageEvent) -> bool:
+    def _check(self, event: MessageEvent) -> bool:
         if not event.is_message():
             return False
 
@@ -129,7 +133,7 @@ class GroupMsgChecker(MsgChecker):
         ):
             return False
 
-        return await super().check(event)
+        return super()._check(event)
 
 
 class PrivateMsgChecker(MsgChecker):
@@ -164,13 +168,13 @@ class PrivateMsgChecker(MsgChecker):
             level, owner, super_users, white_users, black_users, ok_cb, fail_cb
         )
 
-    async def check(self, event: MessageEvent) -> bool:
+    def _check(self, event: MessageEvent) -> bool:
         if not event.is_message():
             return False
         if not event.is_private():
             return False
 
-        return await super().check(event)
+        return super()._check(event)
 
 
 class MsgCheckerFactory:

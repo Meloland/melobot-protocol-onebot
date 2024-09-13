@@ -4,6 +4,7 @@ from types import TracebackType
 from typing import Any, Callable, Iterator, Optional
 
 from melobot.exceptions import BotException
+from melobot.log import get_logger
 from melobot.typ import AsyncCallable, VoidType
 
 from .abc import BotParser, ParseArgs
@@ -67,29 +68,29 @@ class CmdArgFormatter:
     def __init__(
         self,
         convert: Optional[Callable[[str], Any]] = None,
-        verify: Optional[Callable[[Any], bool]] = None,
+        validate: Optional[Callable[[Any], bool]] = None,
         src_desc: Optional[str] = None,
         src_expect: Optional[str] = None,
         default: Any = VoidType.VOID,
         default_replace_flag: Optional[str] = None,
         convert_fail: Optional[AsyncCallable[[FormatInfo], None]] = None,
-        verify_fail: Optional[AsyncCallable[[FormatInfo], None]] = None,
+        validate_fail: Optional[AsyncCallable[[FormatInfo], None]] = None,
         arg_lack: Optional[AsyncCallable[[FormatInfo], None]] = None,
     ) -> None:
         """初始化一个命令参数格式化器
 
         :param convert: 类型转换方法，为空则不进行类型转换
-        :param verify: 值验证方法，为空则不对值进行验证
+        :param validate: 值验证方法，为空则不对值进行验证
         :param src_desc: 命令参数值的功能描述
         :param src_expect: 命令参数值的值期待描述
         :param default: 命令参数值的默认值（默认值 :class:`.Void` 表示无值，而不是 :obj:`None` 表达的空值）
         :param default_replace_flag: 命令参数使用默认值的标志
         :param convert_fail: 类型转换失败的回调，为空则使用默认回调
-        :param verify_fail: 值验证失败的回调，为空则使用默认回调
+        :param validate_fail: 值验证失败的回调，为空则使用默认回调
         :param arg_lack: 参数缺失的回调，为空则执行默认规则
         """
         self.convert = convert
-        self.verify = verify
+        self.validate = validate
         self.src_desc = src_desc
         self.src_expect = src_expect
 
@@ -101,7 +102,7 @@ class CmdArgFormatter:
             )
 
         self.convert_fail = convert_fail
-        self.verify_fail = verify_fail
+        self.validate_fail = validate_fail
         self.arg_lack = arg_lack
 
     def _get_val(self, args: ParseArgs, idx: int) -> Any:
@@ -128,7 +129,7 @@ class CmdArgFormatter:
                 src = self.default
             res = self.convert(src) if self.convert is not None else src
 
-            if self.verify is None or self.verify(res):
+            if self.validate is None or self.validate(res):
                 pass
             else:
                 raise ArgValidateFailed
@@ -139,10 +140,10 @@ class CmdArgFormatter:
             info = FormatInfo(
                 src, self.src_desc, self.src_expect, idx, e, e.__traceback__, group_id
             )
-            if self.verify_fail:
-                await self.verify_fail(info)
+            if self.validate_fail:
+                await self.validate_fail(info)
             else:
-                await self._verify_fail_default(info)
+                await self._validate_fail_default(info)
             return False
 
         except ArgLackError as e:
@@ -185,9 +186,9 @@ class CmdArgFormatter:
         tip += f"参数要求：{info.src_expect}。" if info.src_expect else ""
         tip += f"\n详细错误描述：[{e_class}] {info.exc}"
         tip = f"命令 {info.group_id} 参数格式化失败：\n{tip}"
-        raise FormatError(tip)
+        get_logger().warning(tip)
 
-    async def _verify_fail_default(self, info: FormatInfo) -> None:
+    async def _validate_fail_default(self, info: FormatInfo) -> None:
         src = repr(info.src) if isinstance(info.src, str) else info.src
 
         tip = f"第 {info.idx + 1} 个参数"
@@ -199,14 +200,14 @@ class CmdArgFormatter:
 
         tip += f"参数要求：{info.src_expect}。" if info.src_expect else ""
         tip = f"命令 {info.group_id} 参数格式化失败：\n{tip}"
-        raise FormatError(tip)
+        get_logger().warning(tip)
 
     async def _arglack_default(self, info: FormatInfo) -> None:
         tip = f"第 {info.idx + 1} 个参数"
         tip += f"（{info.src_desc}）缺失。" if info.src_desc else "缺失。"
         tip += f"参数要求：{info.src_expect}。" if info.src_expect else ""
         tip = f"命令 {info.group_id} 参数格式化失败：\n{tip}"
-        raise FormatError(tip)
+        get_logger().warning(tip)
 
 
 @lru_cache(maxsize=128)
