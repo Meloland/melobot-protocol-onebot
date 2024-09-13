@@ -4,6 +4,7 @@ from .check import (
     MsgChecker,
     MsgCheckerFactory,
     PrivateMsgChecker,
+    User,
 )
 from .match import ContainMatcher, EndMatcher, FullMatcher, RegexMatcher, StartMatcher
 from .parse import CmdArgFormatter, CmdParser, CmdParserFactory, FormatInfo

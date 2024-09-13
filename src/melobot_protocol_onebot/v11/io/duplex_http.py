@@ -7,14 +7,13 @@ from asyncio import Future
 import aiohttp
 import aiohttp.log
 import aiohttp.web
-from melobot.io import AbstractIOSource
-from melobot.log import LogLevel, get_logger
+from melobot.log import LogLevel
 
-from ..const import PROTOCOL_IDENTIFIER
+from .base import BaseIO
 from .packet import EchoPacket, InPacket, OutPacket
 
 
-class HttpIO(AbstractIOSource[InPacket, OutPacket, EchoPacket]):
+class HttpIO(BaseIO):
     def __init__(
         self,
         onebot_host: str,
@@ -25,7 +24,7 @@ class HttpIO(AbstractIOSource[InPacket, OutPacket, EchoPacket]):
         access_token: str | None = None,
         cd_time: float = 0.2,
     ) -> None:
-        super().__init__(PROTOCOL_IDENTIFIER)
+        super().__init__(cd_time)
         self.onebot_url = f"http://{onebot_host}:{onebot_port}"
         self.host: str = serve_host
         self.port: int = serve_port
@@ -33,13 +32,11 @@ class HttpIO(AbstractIOSource[InPacket, OutPacket, EchoPacket]):
         self.client_session: aiohttp.ClientSession
         self.secret = secret
         self.access_token = access_token
-        self.cd_time = cd_time
-        self.logger = get_logger()
 
         self._tasks: list[asyncio.Task] = []
         self._in_buf: asyncio.Queue[InPacket] = asyncio.Queue()
         self._out_buf: asyncio.Queue[OutPacket] = asyncio.Queue()
-        self._echo_table: dict[str, Future[EchoPacket]] = {}
+        self._echo_table: dict[str, tuple[str, Future[EchoPacket]]] = {}
         self._opened = asyncio.Event()
         self._pre_send_time = time.time_ns()
 
@@ -104,12 +101,14 @@ class HttpIO(AbstractIOSource[InPacket, OutPacket, EchoPacket]):
                 return
 
             raw = await http_resp.json()
-            self._echo_table.pop(raw["echo"]).set_result(
+            action_type, fut = self._echo_table.pop(raw["echo"])
+            fut.set_result(
                 EchoPacket(
                     time=int(time.time()),
                     data=raw["data"],
                     ok=raw["status"] == "ok",
                     status=raw["retcode"],
+                    action_type=action_type,
                 )
             )
         except aiohttp.ContentTypeError:
@@ -158,5 +157,5 @@ class HttpIO(AbstractIOSource[InPacket, OutPacket, EchoPacket]):
             return EchoPacket(noecho=True)
 
         fut: Future[EchoPacket] = Future()
-        self._echo_table[packet.echo_id] = fut
+        self._echo_table[packet.echo_id] = (packet.action_type, fut)
         return await fut

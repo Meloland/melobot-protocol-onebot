@@ -2,7 +2,7 @@ import json
 from asyncio import Queue, create_task
 
 import websockets
-from melobot._ctx import LoggerCtx
+from melobot.ctx import LoggerCtx
 from melobot.log.base import Logger
 from melobot.utils import singleton
 

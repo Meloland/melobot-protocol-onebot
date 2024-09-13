@@ -24,5 +24,6 @@ class OutPacket(RootOutPak):
 
 @dataclass(frozen=True, kw_only=True)
 class EchoPacket(RootEchoPak):
+    action_type: str = ""
     data: dict = field(default_factory=dict)
     protocol: str = PROTOCOL_IDENTIFIER

@@ -192,7 +192,7 @@ class SetGroupAdminAction(Action):
         super().__init__(type, params)
 
 
-class SetGroupAnonymous(Action):
+class SetGroupAnonymousAction(Action):
     def __init__(self, group_id: int, enable: bool = True) -> None:
         type = "set_group_anonymous"
         params = {"group_id": group_id, "enable": enable}
@@ -244,15 +244,15 @@ class SetFriendAddRequestAction(Action):
 class SetGroupAddRequestAction(Action):
     def __init__(
         self,
-        addFlag: str,
-        addType: Literal["add", "invite"],
+        add_flag: str,
+        add_type: Literal["add", "invite"],
         approve: bool = True,
         reason: str = "",
     ) -> None:
         type = "set_group_add_request"
         params = {
-            "flag": addFlag,
-            "sub_type": addType,
+            "flag": add_flag,
+            "sub_type": add_type,
             "approve": approve,
         }
         if reason:
@@ -366,7 +366,7 @@ class CanSendImageAction(Action):
 
 class CanSendRecordAction(Action):
     def __init__(self) -> None:
-        type = "can_send_image"
+        type = "can_send_record"
         params: dict = {}
         super().__init__(type, params)
 
@@ -385,7 +385,7 @@ class GetVersionInfoAction(Action):
         super().__init__(type, params)
 
 
-class SetRestartInfoAction(Action):
+class SetRestartAction(Action):
     def __init__(self, delay: int = 0) -> None:
         type = "set_restart"
         params = {"delay": delay}

@@ -1,6 +1,6 @@
 from asyncio import Queue
 
-from melobot._ctx import LoggerCtx
+from melobot.ctx import LoggerCtx
 from melobot.log import Logger
 
 from melobot_protocol_onebot.v11.utils import CmdArgFormatter as Fmtter

@@ -15,14 +15,21 @@ def li_ec(lis):
 
 
 async def test_empty():
-    echo.EmptyEcho(**ec())
+    echo.EmptyEcho(**ec(), action_type="")
 
 
 async def test_other():
-    echo.SendMsgEcho(**ec(message_id=123))
-    echo.SendForwardMsgEcho(**ec(message_id=123, forward_id="abc"))
+    assert isinstance(
+        echo.Echo.resolve(**ec(message_id=123), action_type="send_msg"), echo.SendMsgEcho
+    )
+    assert isinstance(
+        echo.Echo.resolve(
+            **ec(message_id=123, forward_id="abc"), action_type="send_private_forward_msg"
+        ),
+        echo.SendForwardMsgEcho,
+    )
 
-    assert echo.GetMsgEcho(
+    assert echo.Echo.resolve(
         **ec(
             time=123,
             message_type="private",
@@ -30,7 +37,8 @@ async def test_other():
             real_id=456,
             sender={"user_id": 789, "nickname": "melody", "sex": "male", "age": 18},
             message="123&#91;45[CQ:node,user_id=10001000,nickname=某人,content=&#91;CQ:face&#44;id=123&#93;哈喽～]12345",
-        )
+        ),
+        action_type="get_msg",
     ).data["message"][0].data == {"text": "123[45"}
 
     assert not (
@@ -169,7 +177,7 @@ async def test_other():
     echo.CanSendImageEcho(**ec(yes=False))
     assert echo.GetStatusEcho(**ec(online=True, good=True, nice=True)).data["nice"]
     assert (
-        echo.GetVersionEcho(
+        echo.GetVersionInfoEcho(
             **ec(
                 app_name="lgr",
                 app_version="1.0.0",

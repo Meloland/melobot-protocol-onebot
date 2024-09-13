@@ -7,31 +7,28 @@ from typing import Callable
 
 import websockets
 import websockets.server
-from melobot.io import AbstractIOSource
-from melobot.log import LogLevel, get_logger
+from melobot.log import LogLevel
 from websockets import ConnectionClosed
 
-from ..const import PROTOCOL_IDENTIFIER
+from .base import BaseIO
 from .packet import EchoPacket, InPacket, OutPacket
 
 
-class ReverseWebSocketIO(AbstractIOSource[InPacket, OutPacket, EchoPacket]):
+class ReverseWebSocketIO(BaseIO):
     def __init__(
         self, host: str, port: int, cd_time: float = 0.2, access_token: str | None = None
     ) -> None:
-        super().__init__(PROTOCOL_IDENTIFIER)
+        super().__init__(cd_time)
         self.host = host
         self.port = port
         self.conn: websockets.server.WebSocketServerProtocol
         self.server: websockets.server.WebSocketServer
         self.access_token = access_token
-        self.cd_time = cd_time
-        self.logger = get_logger()
 
         self._tasks: list[asyncio.Task] = []
         self._in_buf: asyncio.Queue[InPacket] = asyncio.Queue()
         self._out_buf: asyncio.Queue[OutPacket] = asyncio.Queue()
-        self._echo_table: dict[str, Future[EchoPacket]] = {}
+        self._echo_table: dict[str, tuple[str, Future[EchoPacket]]] = {}
         self._opened = asyncio.Event()
         self._pre_send_time = time.time_ns()
         self._conn_requested = False
@@ -86,12 +83,14 @@ class ReverseWebSocketIO(AbstractIOSource[InPacket, OutPacket, EchoPacket]):
                     await self._in_buf.put(InPacket(time=raw["time"], data=raw))
                     continue
 
-                self._echo_table.pop(raw["echo"]).set_result(
+                action_type, fut = self._echo_table.pop(raw["echo"])
+                fut.set_result(
                     EchoPacket(
                         time=int(time.time()),
                         data=raw["data"],
                         ok=raw["status"] == "ok",
                         status=raw["retcode"],
+                        action_type=action_type,
                     )
                 )
             except ConnectionClosed:
@@ -148,5 +147,5 @@ class ReverseWebSocketIO(AbstractIOSource[InPacket, OutPacket, EchoPacket]):
             return EchoPacket(noecho=True)
 
         fut: Future[EchoPacket] = Future()
-        self._echo_table[packet.echo_id] = fut
+        self._echo_table[packet.echo_id] = (packet.action_type, fut)
         return await fut

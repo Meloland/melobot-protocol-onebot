@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from time import time_ns
 from typing import Any, Literal, Mapping, cast
 
@@ -31,6 +33,74 @@ class Echo(RootEcho):
             status=self._model.retcode,
             data=self._model.data,
         )
+
+    @classmethod
+    def resolve(cls, **kwds: Any) -> Echo:
+        action_type = kwds.pop("action_type")
+        match action_type:
+            case "send_private_msg" | "send_group_msg" | "send_msg":
+                return SendMsgEcho(**kwds)
+            case "send_private_forward_msg" | "send_group_forward_msg":
+                return SendForwardMsgEcho(**kwds)
+            case "get_msg":
+                return GetMsgEcho(**kwds)
+            case "get_forward_msg":
+                return GetForwardMsgEcho(**kwds)
+            case "get_login_info":
+                return GetLoginInfoEcho(**kwds)
+            case "get_stranger_info":
+                return GetStrangerInfoEcho(**kwds)
+            case "get_friend_list":
+                return GetFriendListEcho(**kwds)
+            case "get_group_info":
+                return GetGroupInfoEcho(**kwds)
+            case "get_group_list":
+                return GetGroupListEcho(**kwds)
+            case "get_group_member_info":
+                return GetGroupMemberInfoEcho(**kwds)
+            case "get_group_member_list":
+                return GetGroupMemberListEcho(**kwds)
+            case "get_group_honor_info":
+                return GetGroupHonorInfoEcho(**kwds)
+            case "get_cookies":
+                return GetCookiesEcho(**kwds)
+            case "get_csrf_token":
+                return GetCsrfTokenEcho(**kwds)
+            case "get_credentials":
+                return GetCredentialsEcho(**kwds)
+            case "get_record":
+                return GetRecordEcho(**kwds)
+            case "get_image":
+                return GetImageEcho(**kwds)
+            case "can_send_image":
+                return CanSendImageEcho(**kwds)
+            case "can_send_record":
+                return CanSendRecordEcho(**kwds)
+            case "get_status":
+                return GetStatusEcho(**kwds)
+            case "get_version_info":
+                return GetVersionInfoEcho(**kwds)
+            case (
+                "delete_msg"
+                | "send_like"
+                | "set_group_kick"
+                | "set_group_ban"
+                | "set_group_anonymous_ban"
+                | "set_group_whole_ban"
+                | "set_group_admin"
+                | "set_group_anonymous"
+                | "set_group_card"
+                | "set_group_name"
+                | "set_group_leave"
+                | "set_group_special_title"
+                | "set_friend_add_request"
+                | "set_group_add_request"
+                | "set_restart"
+                | "clean_cache"
+            ):
+                return EmptyEcho(**kwds)
+            case _:
+                return Echo(**kwds)
 
 
 class EmptyEcho(Echo):
@@ -369,23 +439,23 @@ class GetStatusEcho(Echo):
     data: _GetStatusEchoData
 
 
-class _GetVersionEchoData(TypedDict):
+class _GetVersionInfoEchoData(TypedDict):
     app_name: str
     app_version: str
     protocol_version: str
 
 
-class GetVersionEcho(Echo):
+class GetVersionInfoEcho(Echo):
 
     class Model(Echo.Model):
-        data: _GetVersionEchoData
+        data: _GetVersionInfoEchoData
 
     def __init__(self, **kv_pairs: Any) -> None:
         super().__init__(**kv_pairs)
 
-        self._model: GetVersionEcho.Model
+        self._model: GetVersionInfoEcho.Model
         for k, v in kv_pairs["data"].items():
             if k not in self._model.data:
                 self.data[k] = v  # type: ignore[literal-required]
 
-    data: _GetVersionEchoData
+    data: _GetVersionInfoEchoData
