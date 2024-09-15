@@ -7,7 +7,7 @@ from melobot.exceptions import BotException
 from melobot.log import get_logger
 from melobot.typ import AsyncCallable, VoidType
 
-from .abc import BotParser, ParseArgs
+from .abc import ParseArgs, Parser
 
 
 class ParseError(BotException): ...
@@ -211,7 +211,7 @@ class CmdArgFormatter:
 
 
 @lru_cache(maxsize=128)
-def cmd_parse(
+def _cmd_parse(
     text: str,
     start_regex: re.Pattern[str],
     sep_regex: re.Pattern[str],
@@ -240,7 +240,7 @@ def cmd_parse(
     return cmd_dict
 
 
-class CmdParser(BotParser):
+class CmdParser(Parser):
     """命令解析器
 
     通过解析命令名和命令参数的形式，解析字符串。
@@ -251,7 +251,7 @@ class CmdParser(BotParser):
         cmd_start: str | list[str],
         cmd_sep: str | list[str],
         targets: str | list[str],
-        formatters: Optional[list[Optional[CmdArgFormatter]]] = None,
+        fmtters: Optional[list[Optional[CmdArgFormatter]]] = None,
     ) -> None:
         """初始化一个命令解析器
 
@@ -268,7 +268,7 @@ class CmdParser(BotParser):
         """
         super().__init__()
         self.targets = targets if isinstance(targets, list) else [targets]
-        self.formatters = formatters
+        self.fmtters = fmtters
 
         self.start_tokens = cmd_start if isinstance(cmd_start, list) else [cmd_start]
         self.sep_tokens = cmd_sep if isinstance(cmd_sep, list) else [cmd_sep]
@@ -299,7 +299,7 @@ class CmdParser(BotParser):
             raise ParseError("命令解析器起始符不能和间隔符重合")
 
     async def parse(self, text: str) -> Optional[ParseArgs]:
-        cmd_dict = cmd_parse(text, self.start_regex, self.sep_regex)
+        cmd_dict = _cmd_parse(text, self.start_regex, self.sep_regex)
         args_dict = {cmd_name: ParseArgs(vals) for cmd_name, vals in cmd_dict.items()}
 
         for group_id in self.targets:
@@ -309,17 +309,17 @@ class CmdParser(BotParser):
         else:
             return None
 
-        if self.formatters is None:
+        if self.fmtters is None:
             return args
 
-        for idx, fmt in enumerate(self.formatters):
+        for idx, fmt in enumerate(self.fmtters):
             if fmt is None:
                 continue
             status = await fmt.format(group_id, args, idx)
             if not status:
                 return None
 
-        args.vals = args.vals[: len(self.formatters)]
+        args.vals = args.vals[: len(self.fmtters)]
         return args
 
 

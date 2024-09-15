@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Any, Callable, Generic
+from typing import Any, Callable
 
-from melobot.adapter.model import EventT
 from melobot.exceptions import BotException
 from melobot.typ import BetterABC, LogicMode, abstractmethod
 from typing_extensions import Self
+
+from ..adapter.event import Event
 
 
 class UtilsError(BotException): ...
@@ -18,32 +19,32 @@ class Cloneable:
         return deepcopy(self)
 
 
-class BotChecker(BetterABC, Cloneable, Generic[EventT]):
+class Checker(BetterABC, Cloneable):
     """检查器基类"""
 
     def __init__(self) -> None:
         super().__init__()
 
-    def __and__(self, other: BotChecker[EventT]) -> BotChecker[EventT]:
-        if not isinstance(other, BotChecker):
+    def __and__(self, other: Checker) -> Checker:
+        if not isinstance(other, Checker):
             raise UtilsError(f"联合检查器定义时出现了非检查器对象，其值为：{other}")
         return WrappedChecker(LogicMode.AND, self, other)
 
-    def __or__(self, other: BotChecker[EventT]) -> BotChecker[EventT]:
-        if not isinstance(other, BotChecker):
+    def __or__(self, other: Checker) -> Checker:
+        if not isinstance(other, Checker):
             raise UtilsError(f"联合检查器定义时出现了非检查器对象，其值为：{other}")
         return WrappedChecker(LogicMode.OR, self, other)
 
-    def __invert__(self) -> BotChecker[EventT]:
+    def __invert__(self) -> Checker:
         return WrappedChecker(LogicMode.NOT, self)
 
-    def __xor__(self, other: BotChecker[EventT]) -> BotChecker[EventT]:
-        if not isinstance(other, BotChecker):
+    def __xor__(self, other: Checker) -> Checker:
+        if not isinstance(other, Checker):
             raise UtilsError(f"联合检查器定义时出现了非检查器对象，其值为：{other}")
         return WrappedChecker(LogicMode.XOR, self, other)
 
     @abstractmethod
-    async def check(self, event: EventT) -> bool:
+    async def check(self, event: Event) -> bool:
         """检查器检查方法
 
         任何检查器应该实现此抽象方法。
@@ -54,20 +55,20 @@ class BotChecker(BetterABC, Cloneable, Generic[EventT]):
         raise NotImplementedError
 
     @staticmethod
-    def new(func: Callable[[EventT], bool]) -> BotChecker[EventT]:
-        return CustomChecker[EventT](func)
+    def new(func: Callable[[Event], bool]) -> Checker:
+        return CustomChecker(func)
 
 
-class CustomChecker(BotChecker[EventT]):
-    def __init__(self, func: Callable[[EventT], bool]) -> None:
+class CustomChecker(Checker):
+    def __init__(self, func: Callable[[Event], bool]) -> None:
         super().__init__()
         self.func = func
 
-    async def check(self, event: EventT) -> bool:
+    async def check(self, event: Event) -> bool:
         return self.func(event)
 
 
-class WrappedChecker(BotChecker[EventT]):
+class WrappedChecker(Checker):
     """合并检查器
 
     在两个 :class:`BotChecker` 对象间使用 | & ^ ~ 运算符即可返回合并检查器。
@@ -81,8 +82,8 @@ class WrappedChecker(BotChecker[EventT]):
     def __init__(
         self,
         mode: LogicMode,
-        checker1: BotChecker[EventT],
-        checker2: BotChecker[EventT] | None = None,
+        checker1: Checker,
+        checker2: Checker | None = None,
     ) -> None:
         """初始化一个合并检查器
 
@@ -94,7 +95,7 @@ class WrappedChecker(BotChecker[EventT]):
         self.mode = mode
         self.c1, self.c2 = checker1, checker2
 
-    async def check(self, event: EventT) -> bool:
+    async def check(self, event: Event) -> bool:
         return LogicMode.calc(
             self.mode,
             await self.c1.check(event),
@@ -102,27 +103,27 @@ class WrappedChecker(BotChecker[EventT]):
         )
 
 
-class BotMatcher(BetterABC, Cloneable):
+class Matcher(BetterABC, Cloneable):
     """匹配器基类"""
 
     def __init__(self) -> None:
         super().__init__()
 
-    def __and__(self, other: BotMatcher) -> WrappedMatcher:
-        if not isinstance(other, BotMatcher):
+    def __and__(self, other: Matcher) -> WrappedMatcher:
+        if not isinstance(other, Matcher):
             raise UtilsError(f"联合匹配器定义时出现了非匹配器对象，其值为：{other}")
         return WrappedMatcher(LogicMode.AND, self, other)
 
-    def __or__(self, other: BotMatcher) -> WrappedMatcher:
-        if not isinstance(other, BotMatcher):
+    def __or__(self, other: Matcher) -> WrappedMatcher:
+        if not isinstance(other, Matcher):
             raise UtilsError(f"联合匹配器定义时出现了非匹配器对象，其值为：{other}")
         return WrappedMatcher(LogicMode.OR, self, other)
 
     def __invert__(self) -> WrappedMatcher:
         return WrappedMatcher(LogicMode.NOT, self)
 
-    def __xor__(self, other: BotMatcher) -> WrappedMatcher:
-        if not isinstance(other, BotMatcher):
+    def __xor__(self, other: Matcher) -> WrappedMatcher:
+        if not isinstance(other, Matcher):
             raise UtilsError(f"联合匹配器定义时出现了非匹配器对象，其值为：{other}")
         return WrappedMatcher(LogicMode.XOR, self, other)
 
@@ -138,7 +139,7 @@ class BotMatcher(BetterABC, Cloneable):
         raise NotImplementedError
 
 
-class WrappedMatcher(BotMatcher):
+class WrappedMatcher(Matcher):
     """合并匹配器
 
     在两个 :class:`BotMatcher` 对象间使用 | & ^ ~ 运算符即可返回合并匹配器
@@ -152,8 +153,8 @@ class WrappedMatcher(BotMatcher):
     def __init__(
         self,
         mode: LogicMode,
-        matcher1: BotMatcher,
-        matcher2: BotMatcher | None = None,
+        matcher1: Matcher,
+        matcher2: Matcher | None = None,
     ) -> None:
         """初始化一个合并匹配器
 
@@ -178,7 +179,7 @@ class ParseArgs:
     vals: list[Any]
 
 
-class BotParser(BetterABC):
+class Parser(BetterABC):
     """解析器基类
 
     解析器一般用作从消息文本中按规则批量提取参数

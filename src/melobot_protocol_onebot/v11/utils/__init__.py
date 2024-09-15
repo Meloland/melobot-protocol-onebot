@@ -1,3 +1,4 @@
+from .abc import ParseArgs
 from .check import (
     AtMsgChecker,
     GroupMsgChecker,

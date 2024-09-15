@@ -3,9 +3,9 @@ from typing import Literal, Optional, cast
 
 from melobot.typ import AsyncCallable
 
-from ..adapter.event import GroupMessageEvent, MessageEvent
+from ..adapter.event import Event, GroupMessageEvent, MessageEvent, PrivateMessageEvent
 from ..adapter.segment import AtSegment
-from .abc import BotChecker
+from .abc import Checker
 
 
 class User(int, Enum):
@@ -18,7 +18,7 @@ class User(int, Enum):
     BLACK = 1
 
 
-class MsgChecker(BotChecker[MessageEvent]):
+class MsgChecker(Checker):
     """消息事件分级权限检查器
 
     主要分 主人、超级用户、白名单用户、普通用户、黑名单用户 五级
@@ -69,15 +69,15 @@ class MsgChecker(BotChecker[MessageEvent]):
         return User.NORMAL
 
     def _check(self, event: MessageEvent) -> bool:
-        if not event.is_message():
-            return False
-
         e_level = self._get_level(event)
         status = User.BLACK < e_level.value and e_level.value >= self.check_lvl.value
         return status
 
-    async def check(self, event: MessageEvent) -> bool:
-        status = self._check(event)
+    async def check(self, event: Event) -> bool:
+        if not isinstance(event, MessageEvent):
+            status = False
+        else:
+            status = self._check(event)
 
         if status and self.ok_cb is not None:
             await self.ok_cb()
@@ -123,14 +123,11 @@ class GroupMsgChecker(MsgChecker):
         self.white_group_list = white_groups if white_groups is not None else []
 
     def _check(self, event: MessageEvent) -> bool:
-        if not event.is_message():
+        if isinstance(event, PrivateMessageEvent):
             return False
-
-        if (
-            not event.is_group()
-            or len(self.white_group_list) == 0
-            or (cast(GroupMessageEvent, event).group_id not in self.white_group_list)
-        ):
+        if len(self.white_group_list) == 0:
+            return False
+        if cast(GroupMessageEvent, event).group_id not in self.white_group_list:
             return False
 
         return super()._check(event)
@@ -169,8 +166,6 @@ class PrivateMsgChecker(MsgChecker):
         )
 
     def _check(self, event: MessageEvent) -> bool:
-        if not event.is_message():
-            return False
         if not event.is_private():
             return False
 
@@ -283,7 +278,7 @@ class MsgCheckerFactory:
         )
 
 
-class AtMsgChecker(BotChecker[MessageEvent]):
+class AtMsgChecker(Checker):
     """艾特消息事件检查器"""
 
     def __init__(self, qid: int | Literal["all"] | None = None) -> None:
@@ -294,8 +289,8 @@ class AtMsgChecker(BotChecker[MessageEvent]):
         super().__init__()
         self.qid = qid
 
-    async def check(self, event: MessageEvent) -> bool:
-        if not event.is_message():
+    async def check(self, event: Event) -> bool:
+        if not isinstance(event, MessageEvent):
             return False
 
         qids = [seg.data["qq"] for seg in event.message if isinstance(seg, AtSegment)]

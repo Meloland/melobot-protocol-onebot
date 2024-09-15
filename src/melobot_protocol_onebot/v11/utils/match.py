@@ -3,10 +3,10 @@ from typing import Any
 
 from melobot.typ import LogicMode
 
-from .abc import BotMatcher
+from .abc import Matcher
 
 
-class StartMatcher(BotMatcher):
+class StartMatcher(Matcher):
     """字符串起始匹配器"""
 
     def __init__(self, target: str | list[str], mode: LogicMode = LogicMode.OR) -> None:
@@ -30,7 +30,7 @@ class StartMatcher(BotMatcher):
         return LogicMode.seq_calc(self.mode, res_seq)
 
 
-class ContainMatcher(BotMatcher):
+class ContainMatcher(Matcher):
     """字符串包含匹配器"""
 
     def __init__(self, target: str | list[str], mode: LogicMode = LogicMode.OR) -> None:
@@ -54,7 +54,7 @@ class ContainMatcher(BotMatcher):
         return LogicMode.seq_calc(self.mode, res_seq)
 
 
-class EndMatcher(BotMatcher):
+class EndMatcher(Matcher):
     """字符串结尾匹配器"""
 
     def __init__(self, target: str | list[str], mode: LogicMode = LogicMode.OR) -> None:
@@ -78,7 +78,7 @@ class EndMatcher(BotMatcher):
         return LogicMode.seq_calc(self.mode, res_seq)
 
 
-class FullMatcher(BotMatcher):
+class FullMatcher(Matcher):
     """字符串全匹配器"""
 
     def __init__(self, target: str | list[str], mode: LogicMode = LogicMode.OR) -> None:
@@ -102,7 +102,7 @@ class FullMatcher(BotMatcher):
         return LogicMode.seq_calc(self.mode, res_seq)
 
 
-class RegexMatcher(BotMatcher):
+class RegexMatcher(Matcher):
     """字符串正则匹配器"""
 
     def __init__(self, regex_pattern: str, regex_flags: Any = 0) -> None:
