@@ -1,3 +1,7 @@
+from typing import cast
+
+from melobot.adapter.content import TextContent
+
 from melobot_protocol_onebot.v11.adapter import event
 from tests.base import *
 
@@ -42,13 +46,15 @@ async def test_msg(msg_head, private_sender, group_sender) -> None:
             "sender": group_sender,
             "message_id": -1234567890,
             "font": 0,
-            "message": "",
+            "message": "123456",
             "user_id": 1574260633,
             "anonymous": None,
             "group_id": 535705163,
-            "raw_message": "",
+            "raw_message": "123456",
         }
     )
+    assert cast(TextContent, e1.contents[0]).text == "123456"
+
     e2 = event.Event.resolve(
         msg_head
         | {

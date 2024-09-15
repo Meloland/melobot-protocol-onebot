@@ -1,3 +1,4 @@
+from os import PathLike
 from typing import Iterable, Literal, Optional, cast
 
 from melobot.adapter import (
@@ -6,6 +7,8 @@ from melobot.adapter import (
     AbstractOutputFactory,
 )
 from melobot.adapter import Adapter as RootAdapter
+from melobot.adapter import content as mc
+from melobot.adapter.content import Content
 from melobot.adapter.model import ActionHandle, EchoT
 from melobot.ctx import Context
 from melobot.exceptions import AdapterError
@@ -19,6 +22,7 @@ from ..io.packet import EchoPacket, InPacket, OutPacket
 from . import action as ac  # pylint: disable=no-name-in-module
 from . import echo as ec  # pylint: disable=no-name-in-module
 from . import event as ev  # pylint: disable=no-name-in-module
+from . import segment as se  # pylint: disable=no-name-in-module
 from .action import Action
 from .echo import Echo
 from .event import Event
@@ -81,20 +85,113 @@ class Adapter(
     async def send_text(
         self, text: str
     ) -> tuple[ActionHandle[ec.SendMsgEcho | None], ...]:
+        return await self.send(text)
+
+    async def send_media(
+        self,
+        name: str,
+        raw: bytes | None = None,
+        url: str | None = None,
+        mimetype: str | None = None,
+    ) -> tuple[ActionHandle[ec.SendMsgEcho | None], ...]:
+        return await self.send(
+            se.contents_to_segs(
+                [mc.MediaContent(name=name, url=url, raw=raw, mimetype=mimetype)]
+            )[0]
+        )
+
+    async def send_image(
+        self,
+        name: str,
+        raw: bytes | None = None,
+        url: str | None = None,
+        mimetype: str | None = None,
+    ) -> tuple[ActionHandle[ec.SendMsgEcho | None], ...]:
+        return await self.send(
+            se.contents_to_segs(
+                [mc.ImageContent(name=name, url=url, raw=raw, mimetype=mimetype)]
+            )[0]
+        )
+
+    async def send_audio(
+        self,
+        name: str,
+        raw: bytes | None = None,
+        url: str | None = None,
+        mimetype: str | None = None,
+    ) -> tuple[ActionHandle[ec.SendMsgEcho | None], ...]:
+        return await self.send(
+            se.contents_to_segs(
+                [mc.AudioContent(name=name, url=url, raw=raw, mimetype=mimetype)]
+            )[0]
+        )
+
+    async def send_voice(
+        self,
+        name: str,
+        raw: bytes | None = None,
+        url: str | None = None,
+        mimetype: str | None = None,
+    ) -> tuple[ActionHandle[ec.SendMsgEcho | None], ...]:
+        return await self.send(
+            se.contents_to_segs(
+                [mc.VoiceContent(name=name, url=url, raw=raw, mimetype=mimetype)]
+            )[0]
+        )
+
+    async def send_video(
+        self,
+        name: str,
+        raw: bytes | None = None,
+        url: str | None = None,
+        mimetype: str | None = None,
+    ) -> tuple[ActionHandle[ec.SendMsgEcho | None], ...]:
+        return await self.send(
+            se.contents_to_segs(
+                [mc.VideoContent(name=name, url=url, raw=raw, mimetype=mimetype)]
+            )[0]
+        )
+
+    async def send_file(
+        self, name: str, path: str | PathLike[str]
+    ) -> tuple[ActionHandle[ec.SendMsgEcho | None], ...]:
+        return await self.send(
+            se.contents_to_segs([mc.FileContent(name=name, flag=str(path))])[0]
+        )
+
+    async def send_refer(
+        self, event: ev.RootEvent, contents: ev.Sequence[Content] | None = None
+    ) -> tuple[ActionHandle[ec.SendMsgEcho | None], ...]:
+        if not isinstance(event, ev.MessageEvent):
+            raise AdapterError(
+                f"提供的事件不是 {ev.MessageEvent.__qualname__} 类型，无法用于发送 refer 消息"
+            )
+
+        segs = se.contents_to_segs(list(contents)) if contents else []
+        segs.insert(0, se.ReplySegment(str(event.message_id)))
+        if isinstance(event, ev.GroupMessageEvent):
+            return await self.send_custom(segs, group_id=event.group_id)
+        return await self.send_custom(segs, user_id=event.user_id)
+
+    async def send_resource(
+        self, name: str, url: str
+    ) -> tuple[ActionHandle[ec.SendMsgEcho | None], ...]:
+        return await self.send(se.contents_to_segs([mc.ResourceContent(name, url)])[0])
+
+    async def send(
+        self, msgs: str | Segment | Iterable[Segment] | dict | Iterable[dict]
+    ) -> tuple[ActionHandle[ec.SendMsgEcho | None], ...]:
         event = try_get_event()
         if not isinstance(event, ev.MessageEvent):
             raise AdapterError(
-                f"当前上下文中不存在事件，或事件不为 {ev.MessageEvent.__qualname__} 类型，无法自动输出文本"
+                f"当前上下文中不存在事件，或事件不为 {ev.MessageEvent.__qualname__} 类型，无法发送消息"
             )
 
         if isinstance(event, ev.GroupMessageEvent):
-            return await self.call_output(ac.SendMsgAction(text, event.user_id))
-        event = cast(ev.GroupMessageEvent, event)
-        return await self.call_output(
-            ac.SendMsgAction(text, event.user_id, event.group_id)
-        )
+            return await self.send_custom(msgs, group_id=event.group_id)
+        return await self.send_custom(msgs, user_id=event.user_id)
 
-    async def send(
+    async def send_custom(
         self,
         msgs: str | Segment | Iterable[Segment] | dict | Iterable[dict],
         user_id: Optional[int] = None,
@@ -103,8 +200,21 @@ class Adapter(
         return await self.call_output(ac.SendMsgAction(msgs, user_id, group_id))
 
     async def send_forward(
+        self, msgs: Iterable[se.NodeSegment]
+    ) -> tuple[ActionHandle[ec.SendForwardMsgEcho | None], ...]:
+        event = try_get_event()
+        if not isinstance(event, ev.MessageEvent):
+            raise AdapterError(
+                f"当前上下文中不存在事件，或事件不为 {ev.MessageEvent.__qualname__} 类型，无法发送消息"
+            )
+
+        if isinstance(event, ev.GroupMessageEvent):
+            return await self.send_forward_custom(msgs, group_id=event.group_id)
+        return await self.send_forward_custom(msgs, user_id=event.user_id)
+
+    async def send_forward_custom(
         self,
-        msgs: str | Segment | Iterable[Segment] | dict | Iterable[dict],
+        msgs: Iterable[se.NodeSegment] | Iterable[dict],
         user_id: Optional[int] = None,
         group_id: Optional[int] = None,
     ) -> tuple[ActionHandle[ec.SendForwardMsgEcho | None], ...]:

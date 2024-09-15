@@ -8,7 +8,7 @@ from melobot.utils import get_id
 from typing_extensions import TypedDict
 
 from ..const import PROTOCOL_IDENTIFIER
-from .segment import Segment, TextSegment
+from .segment import NodeSegment, Segment, TextSegment
 
 
 class Action(RootAction):
@@ -88,7 +88,7 @@ class SendMsgAction(Action):
 class SendForwardMsgAction(Action):
     def __init__(
         self,
-        msgs: str | Segment | Iterable[Segment] | dict | Iterable[dict],
+        msgs: Iterable[NodeSegment] | Iterable[dict],
         user_id: Optional[int] = None,
         group_id: Optional[int] = None,
     ) -> None:

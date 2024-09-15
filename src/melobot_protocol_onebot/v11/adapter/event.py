@@ -8,7 +8,7 @@ from melobot.utils import get_id
 from pydantic import BaseModel
 
 from ..const import PROTOCOL_IDENTIFIER
-from .segment import Segment, TextSegment
+from .segment import Segment, TextSegment, segs_to_contents
 
 
 class Event(RootEvent):
@@ -81,8 +81,7 @@ class MessageEvent(Event):
             self.message = [
                 Segment.resolve(dic["type"], dic["data"]) for dic in data["message"]
             ]
-
-        # TODO: 完成 contents 字段填充
+        self.contents = segs_to_contents(self.message)
 
         self.message_type = self._model.message_type
         self.sub_type = self._model.sub_type

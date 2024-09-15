@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import re
 import warnings
@@ -20,6 +21,7 @@ from typing import (
 )
 
 from beartype.door import is_subhint
+from melobot.adapter import content as mbcontent
 from pydantic import (
     AnyHttpUrl,
     AnyUrl,
@@ -33,7 +35,7 @@ from typing_extensions import NotRequired, Self, TypedDict, TypeVar
 
 from ..const import T, V
 
-FileUrl: TypeAlias = Annotated[
+MediaUrl: TypeAlias = Annotated[
     AnyUrl, UrlConstraints(allowed_schemes=["http", "https", "file", "base64"])
 ]
 
@@ -158,6 +160,110 @@ def _segment_to_cq(type: str, data: dict[str, Any]) -> str:
         s += f",{params}"
     s += "]"
     return s
+
+
+def base64_encode(data: bytes) -> str:
+    code = "base64://"
+    code += base64.b64encode(data).decode("utf-8")
+    return code
+
+
+def segs_to_contents(message: list[Segment]) -> list[mbcontent.Content]:
+    contents: list[mbcontent.Content] = []
+    for seg in message:
+        if isinstance(seg, TextSegment):
+            contents.append(mbcontent.TextContent(seg.data["text"]))
+
+        elif isinstance(seg, ImageRecvSegment):
+            contents.append(
+                mbcontent.ImageContent(name=seg.data["file"], url=str(seg.data["url"]))
+            )
+
+        elif isinstance(seg, RecordRecvSegment):
+            contents.append(
+                mbcontent.VoiceContent(name=seg.data["file"], url=str(seg.data["url"]))
+            )
+
+        elif isinstance(seg, VideoRecvSegment):
+            contents.append(
+                mbcontent.VideoContent(name=seg.data["file"], url=str(seg.data["url"]))
+            )
+
+        elif isinstance(seg, AtSegment):
+            contents.append(
+                mbcontent.ReferContent(
+                    prompt=str(seg.data["qq"]), flag=seg.data["qq"], contents=()
+                )
+            )
+
+        elif isinstance(seg, ShareSegment):
+            contents.append(
+                mbcontent.ResourceContent(
+                    name=seg.data["title"], url=str(seg.data["url"])
+                )
+            )
+
+        else:
+            continue
+
+    return contents
+
+
+def contents_to_segs(contents: list[mbcontent.Content]) -> list[Segment]:
+    segments: list[Segment] = []
+    for c in contents:
+        if isinstance(c, mbcontent.TextContent):
+            segments.append(TextSegment(c.text))
+
+        elif isinstance(c, mbcontent.ImageContent):
+            if c.val:
+                file = base64_encode(c.val)
+                segments.append(ImageSendSegment(file=file, cache=0))
+            else:
+                segments.append(ImageSendSegment(file=cast(str, c.url), cache=0))
+
+        elif isinstance(c, mbcontent.VoiceContent):
+            if c.val:
+                file = base64_encode(c.val)
+                segments.append(RecordSendSegment(file=file, cache=0))
+            else:
+                segments.append(RecordSendSegment(file=cast(str, c.url), cache=0))
+
+        elif isinstance(c, mbcontent.AudioContent):
+            if c.val:
+                file = base64_encode(c.val)
+                segments.append(RecordSendSegment(file=file, cache=0))
+            else:
+                segments.append(RecordSendSegment(file=cast(str, c.url), cache=0))
+
+        elif isinstance(c, mbcontent.VideoContent):
+            if c.val:
+                file = base64_encode(c.val)
+                segments.append(VideoSendSegment(file=file, cache=0))
+            else:
+                segments.append(VideoSendSegment(file=cast(str, c.url), cache=0))
+
+        elif isinstance(c, mbcontent.MediaContent):
+            if c.val:
+                segments.append(TextSegment(f"[OneBot v11 media: {c.name}]"))
+            else:
+                segments.append(
+                    ShareSegment(url=MediaUrl(cast(str, c.url)), title=c.name)
+                )
+
+        elif isinstance(c, mbcontent.FileContent):
+            segments.append(TextSegment(repr(c)))
+
+        elif isinstance(c, mbcontent.ReferContent):
+            segments.append(TextSegment(repr(c)))
+
+        elif isinstance(c, mbcontent.ResourceContent):
+            segments.append(ShareSegment(url=MediaUrl(c.url), title=c.name))
+
+        else:
+            continue
+
+    return segments
 
 
 class Segment(Generic[_SegTypeT, _SegDataT]):
@@ -320,7 +426,7 @@ class FaceSegment(Segment[Literal["face"], _FaceData]):
 
 
 class _ImageSendData(TypedDict):
-    file: str | FileUrl
+    file: str | MediaUrl
     type: NotRequired[Literal["flash"]]
     cache: NotRequired[Literal[0, 1]]
     proxy: NotRequired[Literal[0, 1]]
@@ -330,7 +436,7 @@ class _ImageSendData(TypedDict):
 class _ImageRecvData(TypedDict):
     file: str
     type: NotRequired[Literal["flash"]]
-    url: FileUrl
+    url: MediaUrl
 
 
 class ImageSegment(Segment[Literal["image"], _ImageSendData | _ImageRecvData]):
@@ -343,7 +449,7 @@ class ImageSegment(Segment[Literal["image"], _ImageSendData | _ImageRecvData]):
     def __init__(
         self,
         *,
-        file: str | FileUrl,
+        file: str | MediaUrl,
         type: Literal["flash"] | None = None,
         cache: Literal[0, 1] | None = None,
         proxy: Literal[0, 1] | None = None,
@@ -352,7 +458,7 @@ class ImageSegment(Segment[Literal["image"], _ImageSendData | _ImageRecvData]):
 
     @overload
     def __init__(
-        self, *, file: str, url: FileUrl, type: Literal["flash"] | None = None
+        self, *, file: str, url: MediaUrl, type: Literal["flash"] | None = None
     ) -> None: ...
 
     def __init__(self, **kv_pairs: Any) -> None:
@@ -373,7 +479,7 @@ class ImageSendSegment(ImageSegment):
     def __init__(
         self,
         *,
-        file: str | FileUrl,
+        file: str | MediaUrl,
         type: Literal["flash"] | None = None,
         cache: Literal[0, 1] | None = None,
         proxy: Literal[0, 1] | None = None,
@@ -386,7 +492,7 @@ class ImageSendSegment(ImageSegment):
 
 class ImageRecvSegment(ImageSegment):
     def __init__(
-        self, *, file: str, url: FileUrl, type: Literal["flash"] | None = None
+        self, *, file: str, url: MediaUrl, type: Literal["flash"] | None = None
     ) -> None:
         super().__init__(file=file, url=url, type=type)
 
@@ -394,7 +500,7 @@ class ImageRecvSegment(ImageSegment):
 
 
 class _RecordSendData(TypedDict):
-    file: str | FileUrl
+    file: str | MediaUrl
     magic: NotRequired[Literal[0, 1]]
     cache: NotRequired[Literal[0, 1]]
     proxy: NotRequired[Literal[0, 1]]
@@ -404,7 +510,7 @@ class _RecordSendData(TypedDict):
 class _RecordRecvData(TypedDict):
     file: str
     magic: NotRequired[Literal[0, 1]]
-    url: FileUrl
+    url: MediaUrl
 
 
 class RecordSegment(Segment[Literal["record"], _RecordSendData | _RecordRecvData]):
@@ -417,16 +523,16 @@ class RecordSegment(Segment[Literal["record"], _RecordSendData | _RecordRecvData
     def __init__(
         self,
         *,
-        file: str | FileUrl,
+        file: str | MediaUrl,
         magic: Literal[0, 1] | None = None,
         cache: Literal[0, 1] | None = None,
         proxy: Literal[0, 1] | None = None,
-        timeout: int | None,
+        timeout: int | None = None,
     ) -> None: ...
 
     @overload
     def __init__(
-        self, *, file: str, url: FileUrl, magic: Literal[0, 1] | None = None
+        self, *, file: str, url: MediaUrl, magic: Literal[0, 1] | None = None
     ) -> None: ...
 
     def __init__(self, **kv_pairs: Any) -> None:
@@ -445,11 +551,11 @@ class RecordSendSegment(RecordSegment):
     def __init__(
         self,
         *,
-        file: str | FileUrl,
+        file: str | MediaUrl,
         magic: Literal[0, 1] | None = None,
         cache: Literal[0, 1] | None = None,
         proxy: Literal[0, 1] | None = None,
-        timeout: int | None,
+        timeout: int | None = None,
     ) -> None:
         super().__init__(
             file=file, magic=magic, cache=cache, proxy=proxy, timeout=timeout
@@ -460,7 +566,7 @@ class RecordSendSegment(RecordSegment):
 
 class RecordRecvSegment(RecordSegment):
     def __init__(
-        self, *, file: str, url: FileUrl, magic: Literal[0, 1] | None = None
+        self, *, file: str, url: MediaUrl, magic: Literal[0, 1] | None = None
     ) -> None:
         super().__init__(file=file, url=url, magic=magic)
 
@@ -468,7 +574,7 @@ class RecordRecvSegment(RecordSegment):
 
 
 class _VideoSendData(TypedDict):
-    file: str | FileUrl
+    file: str | MediaUrl
     cache: NotRequired[Literal[0, 1]]
     proxy: NotRequired[Literal[0, 1]]
     timeout: NotRequired[int]
@@ -476,7 +582,7 @@ class _VideoSendData(TypedDict):
 
 class _VideoRecvData(TypedDict):
     file: str
-    url: FileUrl
+    url: MediaUrl
 
 
 class VideoSegment(Segment[Literal["video"], _VideoSendData | _VideoRecvData]):
@@ -489,14 +595,14 @@ class VideoSegment(Segment[Literal["video"], _VideoSendData | _VideoRecvData]):
     def __init__(
         self,
         *,
-        file: str | FileUrl,
+        file: str | MediaUrl,
         cache: Literal[0, 1] | None = None,
         proxy: Literal[0, 1] | None = None,
-        timeout: int | None,
+        timeout: int | None = None,
     ) -> None: ...
 
     @overload
-    def __init__(self, *, file: str, url: FileUrl) -> None: ...
+    def __init__(self, *, file: str, url: MediaUrl) -> None: ...
 
     def __init__(self, **kv_pairs: Any) -> None:
         super().__init__("video", **kv_pairs)
@@ -514,10 +620,10 @@ class VideoSendSegment(VideoSegment):
     def __init__(
         self,
         *,
-        file: str | FileUrl,
+        file: str | MediaUrl,
         cache: Literal[0, 1] | None = None,
         proxy: Literal[0, 1] | None = None,
-        timeout: int | None,
+        timeout: int | None = None,
     ) -> None:
         super().__init__(file=file, cache=cache, proxy=proxy, timeout=timeout)
 
@@ -525,7 +631,7 @@ class VideoSendSegment(VideoSegment):
 
 
 class VideoRecvSegment(VideoSegment):
-    def __init__(self, *, file: str, url: FileUrl) -> None:
+    def __init__(self, *, file: str, url: MediaUrl) -> None:
         super().__init__(file=file, url=url)
 
     data: _VideoRecvData
@@ -672,8 +778,8 @@ class AnonymousSegment(Segment[Literal["anonymous"], _AnonymousData]):
 class _ShareData(TypedDict):
     url: AnyUrl
     title: str
-    content: str
-    image: AnyHttpUrl
+    content: NotRequired[str]
+    image: NotRequired[AnyHttpUrl]
 
 
 class ShareSegment(Segment[Literal["share"], _ShareData]):
@@ -682,7 +788,13 @@ class ShareSegment(Segment[Literal["share"], _ShareData]):
         type: Literal["share"]
         data: _ShareData
 
-    def __init__(self, url: AnyUrl, title: str, content: str, image: AnyHttpUrl) -> None:
+    def __init__(
+        self,
+        url: AnyUrl,
+        title: str,
+        content: str | None = None,
+        image: AnyHttpUrl | None = None,
+    ) -> None:
         super().__init__("share", url=url, title=title, content=content, image=image)
 
     @classmethod

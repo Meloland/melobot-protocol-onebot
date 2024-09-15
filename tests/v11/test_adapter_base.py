@@ -1,5 +1,7 @@
+import asyncio
 from asyncio import Queue, create_task
 
+from melobot.adapter.generic import send_text
 from melobot.bot import Bot
 from melobot.handle import Flow, node
 from melobot.log import GenericLogger
@@ -37,6 +39,8 @@ _TEST_EVENT_DICT = {
     "raw_message": "",
 }
 
+_SUCCESS_SIGNAL = asyncio.Event()
+
 
 class TempIO(BaseIO):
     def __init__(self) -> None:
@@ -66,9 +70,31 @@ class TempIO(BaseIO):
 
 
 @node
-async def process(event: MessageEvent, logger: GenericLogger) -> None:
+async def process(adapter: Adapter, event: MessageEvent, logger: GenericLogger) -> None:
     assert isinstance(event, MessageEvent)
+
+    pending = await adapter.with_echo(send_text)("generic send test")
+    assert (await pending[0]).data["message_id"] == 123456
+
+    pending = await adapter.send_media("test.bmp", url="https://example.com/test.bmp")
+    assert pending[0].action.params["message"][0]["type"] == "share"
+    pending = await adapter.send_media("test.bmp", raw=b"123")
+    assert pending[0].action.params["message"][0]["type"] == "text"
+
+    pending = await adapter.send_image("test.jpg", url="https://example.com/test.jpg")
+    assert pending[0].action.params["message"][0]["type"] == "image"
+
+    pending = await adapter.send_file("test.txt", path="/home/abc/test.txt")
+    assert pending[0].action.params["message"][0]["type"] == "text"
+
+    pending = await adapter.send_refer(event)
+    assert pending[0].action.params["message"][0]["type"] == "reply"
+
+    pending = await adapter.send_resource("123456", "https://example.com/test.jpg")
+    assert pending[0].action.params["message"][0]["type"] == "share"
+
     logger.info("adapter main event process ok")
+    _SUCCESS_SIGNAL.set()
 
 
 class TempPlugin(Plugin):
@@ -78,7 +104,7 @@ class TempPlugin(Plugin):
 
 async def after_bot_started(bot: Bot):
     adapter = next(iter(bot.adapters.values()))
-    pending = await adapter.with_echo(adapter.send)("Hello World!", user_id=12345)
+    pending = await adapter.with_echo(adapter.send_custom)("Hello World!", user_id=12345)
     data = (await pending[0]).data
     mid = data["message_id"]
     assert mid == 123456
@@ -86,10 +112,11 @@ async def after_bot_started(bot: Bot):
 
 
 async def test_adapter_base():
-    mbot = Bot()
+    mbot = Bot("test_adapter_base")
     mbot.add_io(TempIO())
     mbot.add_adapter(Adapter())
     mbot.load_plugin(TempPlugin())
     mbot.on_started(after_bot_started)
     create_task(mbot.internal_run())
     await mbot._rip_signal.wait()
+    await _SUCCESS_SIGNAL.wait()
