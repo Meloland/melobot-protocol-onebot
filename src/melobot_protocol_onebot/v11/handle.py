@@ -63,11 +63,9 @@ def on_event(
                         return None
                     p_args = parse_args
 
-            try:
-                with ArgsCtx().on_ctx(p_args):
-                    return await func()
-            finally:
-                event.spread = not block
+            event.spread = not block
+            with ArgsCtx().on_ctx(p_args):
+                return await func()
 
         n = no_deps_node(_node)
         n.name = func.__name__
