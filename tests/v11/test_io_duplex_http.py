@@ -70,7 +70,7 @@ class MockClientSession:
 
 
 async def test_forward_ws(monkeypatch) -> None:
-    with LoggerCtx().on_ctx(Logger()):
+    with LoggerCtx().in_ctx(Logger()):
         aiohttp._ClientSession = aiohttp.ClientSession
         monkeypatch.setattr(aiohttp, "ClientSession", lambda: MockClientSession())
         io = HttpIO("localhost", 8080, "localhost", 9090)
@@ -106,6 +106,6 @@ async def test_forward_ws(monkeypatch) -> None:
             )
             await _OUT_BUF.get() == _TEST_ACTION.flatten()
             pak = await t
-            assert pak.data["hello"] == _TEST_ECHO_DICT["data"]["hello"]
+            assert pak.data["data"]["hello"] == _TEST_ECHO_DICT["data"]["hello"]
             assert pak.ok == (_TEST_ECHO_DICT["status"] == "ok")
             assert pak.status == _TEST_ECHO_DICT["retcode"]

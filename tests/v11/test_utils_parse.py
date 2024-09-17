@@ -25,7 +25,7 @@ async def test_parser():
     assert (await p2.parse(".test#asdjf;a#")).vals == ["asdjf;a"]
     assert (await p2.parse(".echo#")).vals == []
 
-    with LoggerCtx().on_ctx(Logger()):
+    with LoggerCtx().in_ctx(Logger()):
         p3 = pf1.get(
             ["test", "echo"],
             [

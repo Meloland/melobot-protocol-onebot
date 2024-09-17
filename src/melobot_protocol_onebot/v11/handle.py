@@ -15,7 +15,9 @@ from .utils.parse import CmdArgFormatter, CmdParser
 @singleton
 class ArgsCtx(Context[ParseArgs | None]):
     def __init__(self) -> None:
-        super().__init__("ARGS_CTX", LookupError, "当前上下文中不存在参数解析结果")
+        super().__init__(
+            "ONEBOT_V11_MSG_ARGS", LookupError, "当前上下文中不存在参数解析结果"
+        )
 
 
 class Args(Depends):
@@ -64,7 +66,7 @@ def on_event(
                     p_args = parse_args
 
             event.spread = not block
-            with ArgsCtx().on_ctx(p_args):
+            with ArgsCtx().in_ctx(p_args):
                 return await func()
 
         n = no_deps_node(_node)

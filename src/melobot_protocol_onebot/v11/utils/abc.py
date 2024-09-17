@@ -6,6 +6,7 @@ from typing import Any, Callable
 
 from melobot.exceptions import BotException
 from melobot.typ import BetterABC, LogicMode, abstractmethod
+from melobot.utils import to_async
 from typing_extensions import Self
 
 from ..adapter.event import Event
@@ -96,10 +97,13 @@ class WrappedChecker(Checker):
         self.c1, self.c2 = checker1, checker2
 
     async def check(self, event: Event) -> bool:
-        return LogicMode.calc(
-            self.mode,
-            await self.c1.check(event),
-            (await self.c2.check(event)) if self.c2 is not None else None,
+        c2_check = (
+            (lambda: self.c2.check(event))
+            if self.c2 is not None
+            else to_async(lambda: None)  # type: ignore[arg-type]
+        )
+        return await LogicMode.async_short_calc(
+            self.mode, lambda: self.c1.check(event), c2_check
         )
 
 
@@ -167,10 +171,13 @@ class WrappedMatcher(Matcher):
         self.m1, self.m2 = matcher1, matcher2
 
     async def match(self, text: str) -> bool:
-        return LogicMode.calc(
-            self.mode,
-            self.m1.match(text),
-            self.m2.match(text) if self.m2 is not None else None,
+        m2_match = (
+            (lambda: self.m2.match(text))
+            if self.m2 is not None
+            else to_async(lambda: None)  # type: ignore[arg-type]
+        )
+        return await LogicMode.async_short_calc(
+            self.mode, lambda: self.m1.match(text), m2_match
         )
 
 

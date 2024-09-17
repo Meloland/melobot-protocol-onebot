@@ -117,6 +117,6 @@ async def test_adapter_base():
     mbot.add_adapter(Adapter())
     mbot.load_plugin(TempPlugin())
     mbot.on_started(after_bot_started)
-    create_task(mbot.internal_run())
+    create_task(mbot.core_run())
     await mbot._rip_signal.wait()
     await _SUCCESS_SIGNAL.wait()

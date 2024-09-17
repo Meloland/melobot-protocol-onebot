@@ -71,7 +71,7 @@ class MockWebsocket:
 
 
 async def test_forward_ws(monkeypatch) -> None:
-    with LoggerCtx().on_ctx(Logger()):
+    with LoggerCtx().in_ctx(Logger()):
         monkeypatch.setattr(websockets, "connect", MockWebsocket.get)
         io = ForwardWebSocketIO("ws://example.com", max_retry=3, retry_delay=1)
         async with io:
@@ -106,6 +106,6 @@ async def test_forward_ws(monkeypatch) -> None:
                 json.dumps(_TEST_ECHO_DICT | {"echo": _TEST_ACTION.extract()["echo"]})
             )
             pak = await t
-            assert pak.data["hello"] == _TEST_ECHO_DICT["data"]["hello"]
+            assert pak.data["data"]["hello"] == _TEST_ECHO_DICT["data"]["hello"]
             assert pak.ok == (_TEST_ECHO_DICT["status"] == "ok")
             assert pak.status == _TEST_ECHO_DICT["retcode"]

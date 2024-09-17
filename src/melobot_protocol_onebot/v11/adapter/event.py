@@ -28,7 +28,7 @@ class Event(RootEvent):
         self.self_id = self._model.self_id
         self.post_type = self._model.post_type
 
-        self.raw_data = event_data
+        self.raw = event_data
 
     @classmethod
     def resolve(cls, event_data: dict[str, Any]) -> Event:
@@ -137,7 +137,7 @@ class MessageEvent(Event):
 
     def is_private_temp(self) -> bool:
         """是否为临时会话（属于私聊的一种）"""
-        return "temp_source" in self.raw_data
+        return "temp_source" in self.raw
 
     def is_group(self) -> bool:
         """是否为群消息（正常群消息、群匿名消息、群自身消息、群系统消息属于该类型）"""
@@ -345,7 +345,7 @@ class _MetaHeartBeatStatus:
 
         self.online = self._model.online
         self.good = self._model.good
-        self.raw_data: dict[str, Any] = status_data
+        self.raw: dict[str, Any] = status_data
 
 
 class HeartBeatMetaEvent(MetaEvent):

@@ -76,7 +76,7 @@ class Adapter(
         async def wrapped_api(
             *args: P.args, **kwargs: P.kwargs
         ) -> tuple[ActionHandle[EchoT], ...]:
-            with EchoRequireCtx().on_ctx(True):
+            with EchoRequireCtx().in_ctx(True):
                 handles = await func(*args, **kwargs)
             return cast(tuple[ActionHandle[EchoT], ...], handles)
 

@@ -22,7 +22,7 @@ class Echo(RootEcho):
 
     def __init__(self, **kv_pairs: Any) -> None:
         self._model = self.Model(**kv_pairs)
-        self.raw_data = kv_pairs
+        self.raw = kv_pairs
 
         super().__init__(
             int(time_ns() / 1e9),

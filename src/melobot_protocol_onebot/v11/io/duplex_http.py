@@ -80,7 +80,7 @@ class HttpIO(BaseIO):
                 asyncio.create_task(self._handle_output(out_packet))
                 self._pre_send_time = time.time_ns()
             except Exception:
-                self.logger.exception("OneBot v11 正向 WebSocket IO 源输出异常")
+                self.logger.exception("OneBot v11 HTTP IO 源输出异常")
                 self.logger.generic_obj("异常点局部变量", locals(), level=LogLevel.ERROR)
                 self.logger.generic_obj(
                     "异常点的发送数据", out_packet.data, level=LogLevel.ERROR
@@ -101,11 +101,14 @@ class HttpIO(BaseIO):
                 return
 
             raw = await http_resp.json()
-            action_type, fut = self._echo_table.pop(raw["echo"])
+            if (echo_id := raw["echo"]) is None:
+                return
+
+            action_type, fut = self._echo_table.pop(echo_id)
             fut.set_result(
                 EchoPacket(
                     time=int(time.time()),
-                    data=raw["data"],
+                    data=raw,
                     ok=raw["status"] == "ok",
                     status=raw["retcode"],
                     action_type=action_type,

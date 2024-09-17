@@ -275,6 +275,7 @@ class Segment(Generic[_SegTypeT, _SegDataT]):
     __dynamic_segments__: dict[str, type[Segment]] = {}
 
     def __init__(self, seg_type: _SegTypeT, **seg_data: Any) -> None:
+        self.raw = {"type": seg_type, "data": seg_data}
         self._model = self.Model(
             type=seg_type,
             data={k: v for k, v in seg_data.items() if v is not None},
@@ -283,9 +284,7 @@ class Segment(Generic[_SegTypeT, _SegDataT]):
     @classmethod
     @final
     def add_type(
-        cls,
-        seg_type_hint: type[T],
-        seg_data_hint: type[V],
+        cls, seg_type_hint: type[T], seg_data_hint: type[V]
     ) -> type[_CustomSegment[T, V]]:  # type: ignore[type-var]
         if not is_subhint(seg_type_hint, Literal):
             raise ValueError("新消息段的类型标注必须为 Literal")
@@ -393,8 +392,8 @@ class TextSegment(Segment[Literal["text"], _TextData]):
         type: Literal["text"]
         data: _TextData
 
-    def __init__(self, text: str) -> None:
-        super().__init__("text", text=text)
+    def __init__(self, text: str, **kwargs: Any) -> None:
+        super().__init__("text", text=text, **kwargs)
 
     @classmethod
     def resolve(cls, seg_type: Literal["text"], seg_data: _TextData) -> Self:
@@ -417,8 +416,8 @@ class FaceSegment(Segment[Literal["face"], _FaceData]):
         type: Literal["face"]
         data: _FaceData
 
-    def __init__(self, id: int) -> None:
-        super().__init__("face", id=id)
+    def __init__(self, id: int, **kwargs: Any) -> None:
+        super().__init__("face", id=id, **kwargs)
 
     @classmethod
     def resolve(cls, seg_type: Literal["face"], seg_data: _FaceData) -> Self:
@@ -484,17 +483,25 @@ class ImageSendSegment(ImageSegment):
         cache: Literal[0, 1] | None = None,
         proxy: Literal[0, 1] | None = None,
         timeout: int | None = None,
+        **kwargs: Any,
     ) -> None:
-        super().__init__(file=file, type=type, cache=cache, proxy=proxy, timeout=timeout)
+        super().__init__(
+            file=file, type=type, cache=cache, proxy=proxy, timeout=timeout, **kwargs
+        )
 
     data: _ImageSendData
 
 
 class ImageRecvSegment(ImageSegment):
     def __init__(
-        self, *, file: str, url: MediaUrl, type: Literal["flash"] | None = None
+        self,
+        *,
+        file: str,
+        url: MediaUrl,
+        type: Literal["flash"] | None = None,
+        **kwargs: Any,
     ) -> None:
-        super().__init__(file=file, url=url, type=type)
+        super().__init__(file=file, url=url, type=type, **kwargs)
 
     data: _ImageRecvData
 
@@ -556,9 +563,10 @@ class RecordSendSegment(RecordSegment):
         cache: Literal[0, 1] | None = None,
         proxy: Literal[0, 1] | None = None,
         timeout: int | None = None,
+        **kwargs: Any,
     ) -> None:
         super().__init__(
-            file=file, magic=magic, cache=cache, proxy=proxy, timeout=timeout
+            file=file, magic=magic, cache=cache, proxy=proxy, timeout=timeout, **kwargs
         )
 
     data: _RecordSendData
@@ -566,9 +574,14 @@ class RecordSendSegment(RecordSegment):
 
 class RecordRecvSegment(RecordSegment):
     def __init__(
-        self, *, file: str, url: MediaUrl, magic: Literal[0, 1] | None = None
+        self,
+        *,
+        file: str,
+        url: MediaUrl,
+        magic: Literal[0, 1] | None = None,
+        **kwargs: Any,
     ) -> None:
-        super().__init__(file=file, url=url, magic=magic)
+        super().__init__(file=file, url=url, magic=magic, **kwargs)
 
     data: _RecordRecvData
 
@@ -624,15 +637,16 @@ class VideoSendSegment(VideoSegment):
         cache: Literal[0, 1] | None = None,
         proxy: Literal[0, 1] | None = None,
         timeout: int | None = None,
+        **kwargs: Any,
     ) -> None:
-        super().__init__(file=file, cache=cache, proxy=proxy, timeout=timeout)
+        super().__init__(file=file, cache=cache, proxy=proxy, timeout=timeout, **kwargs)
 
     data: _VideoSendData
 
 
 class VideoRecvSegment(VideoSegment):
-    def __init__(self, *, file: str, url: MediaUrl) -> None:
-        super().__init__(file=file, url=url)
+    def __init__(self, *, file: str, url: MediaUrl, **kwargs: Any) -> None:
+        super().__init__(file=file, url=url, **kwargs)
 
     data: _VideoRecvData
 
@@ -647,8 +661,8 @@ class AtSegment(Segment[Literal["at"], _AtData]):
         type: Literal["at"]
         data: _AtData
 
-    def __init__(self, qq: int | Literal["all"]) -> None:
-        super().__init__("at", qq=qq)
+    def __init__(self, qq: int | Literal["all"], **kwargs: Any) -> None:
+        super().__init__("at", qq=qq, **kwargs)
 
     @classmethod
     def resolve(cls, seg_type: Literal["at"], seg_data: _AtData) -> AtSegment:
@@ -664,8 +678,8 @@ class RpsSegment(Segment[Literal["rps"], _RpsData]):
         type: Literal["rps"]
         data: _RpsData
 
-    def __init__(self) -> None:
-        super().__init__("rps")
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__("rps", **kwargs)
 
     @classmethod
     def resolve(cls, seg_type: Literal["rps"], seg_data: _RpsData) -> RpsSegment:
@@ -681,8 +695,8 @@ class DiceSegment(Segment[Literal["dice"], _DictData]):
         type: Literal["dice"]
         data: _DictData
 
-    def __init__(self) -> None:
-        super().__init__("dice")
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__("dice", **kwargs)
 
     @classmethod
     def resolve(cls, seg_type: Literal["dice"], seg_data: _DictData) -> DiceSegment:
@@ -698,8 +712,8 @@ class ShakeSegment(Segment[Literal["shake"], _ShakeData]):
         type: Literal["shake"]
         data: _ShakeData
 
-    def __init__(self) -> None:
-        super().__init__("shake")
+    def __init__(self, **kwargs: Any) -> None:
+        super().__init__("shake", **kwargs)
 
     @classmethod
     def resolve(cls, seg_type: Literal["shake"], seg_data: _ShakeData) -> ShakeSegment:
@@ -742,15 +756,15 @@ class PokeSegment(Segment[Literal["poke"], _PokeSendData | _PokeRecvData]):
 
 
 class PokeSendSegment(PokeSegment):
-    def __init__(self, type: str, id: int) -> None:
-        super().__init__(type=type, id=id)
+    def __init__(self, type: str, id: int, **kwargs: Any) -> None:
+        super().__init__(type=type, id=id, **kwargs)
 
     data: _PokeSendData
 
 
 class PokeRecvSegment(PokeSegment):
-    def __init__(self, type: str, id: int, name: int) -> None:
-        super().__init__(type=type, id=id, name=name)
+    def __init__(self, type: str, id: int, name: int, **kwargs: Any) -> None:
+        super().__init__(type=type, id=id, name=name, **kwargs)
 
     data: _PokeRecvData
 
@@ -765,8 +779,8 @@ class AnonymousSegment(Segment[Literal["anonymous"], _AnonymousData]):
         type: Literal["anonymous"]
         data: _AnonymousData
 
-    def __init__(self, ignore: Literal[0, 1] | None = None) -> None:
-        super().__init__("anonymous", ignore=ignore)
+    def __init__(self, ignore: Literal[0, 1] | None = None, **kwargs: Any) -> None:
+        super().__init__("anonymous", ignore=ignore, **kwargs)
 
     @classmethod
     def resolve(
@@ -794,8 +808,11 @@ class ShareSegment(Segment[Literal["share"], _ShareData]):
         title: str,
         content: str | None = None,
         image: AnyHttpUrl | None = None,
+        **kwargs: Any,
     ) -> None:
-        super().__init__("share", url=url, title=title, content=content, image=image)
+        super().__init__(
+            "share", url=url, title=title, content=content, image=image, **kwargs
+        )
 
     @classmethod
     def resolve(cls, seg_type: Literal["share"], seg_data: _ShareData) -> ShareSegment:
@@ -818,8 +835,8 @@ class ContactSegment(Segment[Literal["contact"], _ContactFriendData | _ContactGr
         type: Literal["contact"]
         data: _ContactFriendData | _ContactGroupData
 
-    def __init__(self, type: Literal["qq", "group"], id: int) -> None:
-        super().__init__("contact", type=type, id=id)
+    def __init__(self, type: Literal["qq", "group"], id: int, **kwargs: Any) -> None:
+        super().__init__("contact", type=type, id=id, **kwargs)
 
     @classmethod
     def resolve(
@@ -833,15 +850,15 @@ class ContactSegment(Segment[Literal["contact"], _ContactFriendData | _ContactGr
 
 
 class ContactFriendSegment(ContactSegment):
-    def __init__(self, id: int) -> None:
-        super().__init__(type="qq", id=id)
+    def __init__(self, id: int, **kwargs: Any) -> None:
+        super().__init__(type="qq", id=id, **kwargs)
 
     data: _ContactFriendData
 
 
 class ContactGroupSegment(ContactSegment):
-    def __init__(self, id: int) -> None:
-        super().__init__(type="group", id=id)
+    def __init__(self, id: int, **kwargs: Any) -> None:
+        super().__init__(type="group", id=id, **kwargs)
 
     data: _ContactGroupData
 
@@ -860,9 +877,16 @@ class LocationSegment(Segment[Literal["location"], _LocationData]):
         data: _LocationData
 
     def __init__(
-        self, lat: float, lon: float, title: str | None = None, content: str | None = None
+        self,
+        lat: float,
+        lon: float,
+        title: str | None = None,
+        content: str | None = None,
+        **kwargs: Any,
     ) -> None:
-        super().__init__("location", lat=lat, lon=lon, title=title, content=content)
+        super().__init__(
+            "location", lat=lat, lon=lon, title=title, content=content, **kwargs
+        )
 
     @classmethod
     def resolve(
@@ -919,8 +943,10 @@ class MusicSegment(Segment[Literal["music"], _MusicData | _MusicCustomData]):
 
 
 class MusicPlatformSegment(MusicSegment):
-    def __init__(self, *, type: Literal["qq", "163", "xm"], id: str) -> None:
-        super().__init__(type=type, id=id)
+    def __init__(
+        self, *, type: Literal["qq", "163", "xm"], id: str, **kwargs: Any
+    ) -> None:
+        super().__init__(type=type, id=id, **kwargs)
 
     data: _MusicData
 
@@ -935,9 +961,16 @@ class MusicCustomSegment(MusicSegment):
         title: str,
         content: str | None = None,
         image: AnyHttpUrl | None = None,
+        **kwargs: Any,
     ) -> None:
         super().__init__(
-            type=type, url=url, audio=audio, title=title, content=content, image=image
+            type=type,
+            url=url,
+            audio=audio,
+            title=title,
+            content=content,
+            image=image,
+            **kwargs,
         )
 
     data: _MusicCustomData
@@ -953,8 +986,8 @@ class ReplySegment(Segment[Literal["reply"], _ReplyData]):
         type: Literal["reply"]
         data: _ReplyData
 
-    def __init__(self, id: str) -> None:
-        super().__init__("reply", id=id)
+    def __init__(self, id: str, **kwargs: Any) -> None:
+        super().__init__("reply", id=id, **kwargs)
 
     @classmethod
     def resolve(cls, seg_type: Literal["reply"], seg_data: _ReplyData) -> ReplySegment:
@@ -971,8 +1004,8 @@ class ForwardSegment(Segment[Literal["forward"], _ForwardData]):
         type: Literal["forward"]
         data: _ForwardData
 
-    def __init__(self, id: str) -> None:
-        super().__init__("forward", id=id)
+    def __init__(self, id: str, **kwargs: Any) -> None:
+        super().__init__("forward", id=id, **kwargs)
 
     @classmethod
     def resolve(
@@ -1091,22 +1124,28 @@ class NodeSegment(
 
 
 class NodeReferSegment(NodeSegment):
-    def __init__(self, id: str) -> None:
-        super().__init__(id=id)
+    def __init__(self, id: str, **kwargs: Any) -> None:
+        super().__init__(id=id, **kwargs)
 
     data: _NodeReferData
 
 
 class NodeStdCustomSegment(NodeSegment):
-    def __init__(self, user_id: int, nickname: str, content: list[Segment]) -> None:
-        super().__init__(uin=user_id, name=nickname, content=content, use_std=True)
+    def __init__(
+        self, user_id: int, nickname: str, content: list[Segment], **kwargs: Any
+    ) -> None:
+        super().__init__(
+            uin=user_id, name=nickname, content=content, use_std=True, **kwargs
+        )
 
     data: _NodeStdCustomDataInterface
 
 
 class NodeGocqCustomSegment(NodeSegment):
-    def __init__(self, uin: int, name: str, content: list[Segment]) -> None:
-        super().__init__(uin=uin, name=name, content=content, use_std=False)
+    def __init__(
+        self, uin: int, name: str, content: list[Segment], **kwargs: Any
+    ) -> None:
+        super().__init__(uin=uin, name=name, content=content, use_std=False, **kwargs)
 
     data: _NodeGocqCustomDataInterface
 
@@ -1121,8 +1160,8 @@ class XmlSegment(Segment[Literal["xml"], _XmlData]):
         type: Literal["xml"]
         data: _XmlData
 
-    def __init__(self, data: str) -> None:
-        super().__init__("xml", data=data)
+    def __init__(self, data: str, **kwargs: Any) -> None:
+        super().__init__("xml", data=data, **kwargs)
 
     @classmethod
     def resolve(cls, seg_type: Literal["xml"], seg_data: _XmlData) -> XmlSegment:
@@ -1139,8 +1178,8 @@ class JsonSegment(Segment[Literal["json"], _JsonData]):
         type: Literal["json"]
         data: _JsonData
 
-    def __init__(self, data: str) -> None:
-        super().__init__("json", data=data)
+    def __init__(self, data: str, **kwargs: Any) -> None:
+        super().__init__("json", data=data, **kwargs)
 
     @classmethod
     def resolve(cls, seg_type: Literal["json"], seg_data: _JsonData) -> JsonSegment:
