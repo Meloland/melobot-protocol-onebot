@@ -5,6 +5,7 @@ from asyncio import Future
 from itertools import count
 
 import websockets
+from melobot.exceptions import IOError
 from melobot.log import LogLevel
 from websockets.exceptions import ConnectionClosed
 
@@ -36,6 +37,7 @@ class ForwardWebSocketIO(BaseIO):
         self._pre_send_time = time.time_ns()
 
     async def _input_loop(self) -> None:
+        # pylint: disable=duplicate-code
         while True:
             try:
                 raw_str = await self.conn.recv()
@@ -110,7 +112,7 @@ class ForwardWebSocketIO(BaseIO):
                 if "403" in str(e):
                     self.logger.warning("403 错误可能是 access_token 未配置或无效")
         if not ok_flag:
-            raise RuntimeError("重试已达最大次数，已放弃建立连接")
+            raise IOError("重试已达最大次数，已放弃建立连接")
 
         self._tasks.append(asyncio.create_task(self._input_loop()))
         self._tasks.append(asyncio.create_task(self._output_loop()))
