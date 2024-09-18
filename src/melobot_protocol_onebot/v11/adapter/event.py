@@ -16,7 +16,7 @@ class Event(RootEvent):
     class Model(BaseModel):
         time: int
         self_id: int
-        post_type: Literal["message", "notice", "request", "meta_event"]
+        post_type: Literal["message", "notice", "request", "meta_event"] | str
 
     def __init__(self, **event_data: Any) -> None:
         self._model = self.Model(**event_data)
@@ -38,7 +38,9 @@ class Event(RootEvent):
             "request": RequestEvent,
             "meta_event": MetaEvent,
         }
-        return cls_map[event_data["post_type"]].resolve(event_data)
+        if (etype := event_data.get("post_type")) in cls_map:
+            return cls_map[etype].resolve(event_data)
+        return cls(**event_data)
 
     def is_message(self) -> bool:
         return self.post_type == "message"
@@ -57,10 +59,13 @@ class MessageEvent(Event):
 
     class Model(Event.Model):
         post_type: Literal["message"]
-        message_type: Literal["private", "group"]
-        sub_type: Literal[
-            "friend", "group", "other", "normal", "anonymous", "notice", "group_self"
-        ]
+        message_type: Literal["private", "group"] | str
+        sub_type: (
+            Literal[
+                "friend", "group", "other", "normal", "anonymous", "notice", "group_self"
+            ]
+            | str
+        )
         message_id: int
         user_id: int
         raw_message: str
@@ -96,7 +101,9 @@ class MessageEvent(Event):
             "private": PrivateMessageEvent,
             "group": GroupMessageEvent,
         }
-        return cls_map[event_data["message_type"]](**event_data)
+        if (mtype := event_data.get("message_type")) in cls_map:
+            return cls_map[mtype](**event_data)
+        return cls(**event_data)
 
     @property
     def text(self) -> str:
@@ -212,7 +219,7 @@ class PrivateMessageEvent(MessageEvent):
 
     class Model(MessageEvent.Model):
         message_type: Literal["private"]
-        sub_type: Literal["friend", "group", "other"]
+        sub_type: Literal["friend", "group", "other"] | str
 
     def __init__(self, **event_data: Any) -> None:
         super().__init__(**event_data)
@@ -264,7 +271,7 @@ class GroupMessageEvent(MessageEvent):
 
     class Model(MessageEvent.Model):
         message_type: Literal["group"]
-        sub_type: Literal["normal", "anonymous", "notice", "group_self"]
+        sub_type: Literal["normal", "anonymous", "notice", "group_self"] | str
         group_id: int
 
     def __init__(self, **event_data: Any) -> None:
@@ -288,7 +295,7 @@ class MetaEvent(Event):
 
     class Model(Event.Model):
         post_type: Literal["meta_event"]
-        meta_event_type: Literal["lifecycle", "heartbeat"]
+        meta_event_type: Literal["lifecycle", "heartbeat"] | str
 
     def __init__(self, **event_data: Any) -> None:
         super().__init__(**event_data)
@@ -302,7 +309,9 @@ class MetaEvent(Event):
             "lifecycle": LifeCycleMetaEvent,
             "heartbeat": HeartBeatMetaEvent,
         }
-        return cls_map[event_data["meta_event_type"]](**event_data)
+        if (mtype := event_data.get("meta_event_type")) in cls_map:
+            return cls_map[mtype](**event_data)
+        return cls(**event_data)
 
     def is_lifecycle(self) -> bool:
         return self.meta_event_type == "lifecycle"
@@ -315,7 +324,7 @@ class LifeCycleMetaEvent(MetaEvent):
 
     class Model(MetaEvent.Model):
         meta_event_type: Literal["lifecycle"]
-        sub_type: Literal["enable", "disable", "connect"]
+        sub_type: Literal["enable", "disable", "connect"] | str
 
     def __init__(self, **event_data: Any) -> None:
         super().__init__(**event_data)
@@ -368,17 +377,20 @@ class NoticeEvent(Event):
 
     class Model(Event.Model):
         post_type: Literal["notice"]
-        notice_type: Literal[
-            "group_upload",
-            "group_admin",
-            "group_decrease",
-            "group_increase",
-            "group_ban",
-            "friend_add",
-            "group_recall",
-            "friend_recall",
-            "notify",
-        ]
+        notice_type: (
+            Literal[
+                "group_upload",
+                "group_admin",
+                "group_decrease",
+                "group_increase",
+                "group_ban",
+                "friend_add",
+                "group_recall",
+                "friend_recall",
+                "notify",
+            ]
+            | str
+        )
 
     def __init__(self, **event_data: Any) -> None:
         super().__init__(**event_data)
@@ -398,9 +410,12 @@ class NoticeEvent(Event):
             "group_recall": GroupRecallNoticeEvent,
             "friend_recall": FriendRecallNoticeEvent,
         }
-        if event_data["notice_type"] in cls_map:
-            return cls_map[event_data["notice_type"]](**event_data)
-        return NotifyNoticeEvent.resolve(event_data)
+        ntype = event_data.get("notice_type")
+        if ntype in cls_map:
+            return cls_map[ntype](**event_data)
+        if ntype == "notify":
+            return NotifyNoticeEvent.resolve(event_data)
+        return cls(**event_data)
 
     def is_group_upload(self) -> bool:
         return self.notice_type == "group_upload"
@@ -633,7 +648,7 @@ class NotifyNoticeEvent(NoticeEvent):
 
     class Model(NoticeEvent.Model):
         notice_type: Literal["notify"]
-        sub_type: Literal["poke", "lucky_king", "honor"]
+        sub_type: Literal["poke", "lucky_king", "honor"] | str
 
     def __init__(self, **event_data: Any) -> None:
         super().__init__(**event_data)
@@ -650,7 +665,9 @@ class NotifyNoticeEvent(NoticeEvent):
             "lucky_king": LuckyKingNotifyEvent,
             "honor": HonorNotifyEvent,
         }
-        return cls_map[event_data["sub_type"]](**event_data)
+        if (stype := event_data.get("sub_type")) in cls_map:
+            return cls_map[stype](**event_data)
+        return cls(**event_data)
 
     def is_poke(self) -> bool:
         return self.sub_type == "poke"
@@ -731,7 +748,7 @@ class RequestEvent(Event):
 
     class Model(Event.Model):
         post_type: Literal["request"]
-        request_type: Literal["friend", "group"]
+        request_type: Literal["friend", "group"] | str
 
     def __init__(self, **event_data: Any) -> None:
         super().__init__(**event_data)
@@ -745,7 +762,9 @@ class RequestEvent(Event):
             "friend": FriendRequestEvent,
             "group": GroupRequestEvent,
         }
-        return cls_map[event_data["request_type"]](**event_data)
+        if (rtype := event_data.get("request_type")) in cls_map:
+            return cls_map[rtype](**event_data)
+        return cls(**event_data)
 
     def is_friend(self) -> bool:
         return self.request_type == "friend"
