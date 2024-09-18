@@ -1,6 +1,6 @@
 [project]
 name = "melobot-protocol-onebot"
-version = "1.0.0rc1"
+dynamic = ["version"]
 description = "IO and adapter layer implementation of onebot protocol for melobot."
 authors = [
     {name = "aicorein", email = "aicorein@meloland.org"},
@@ -65,6 +65,7 @@ line_length = 90
 
 [tool.pdm]
 distribution = true
+version = { source = "file", path = "src/melobot_protocol_onebot/__init__.py" }
 
 [tool.pdm.scripts]
 isort = {shell = "isort src/melobot_protocol_onebot"}
