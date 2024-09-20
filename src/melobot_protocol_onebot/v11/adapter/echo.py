@@ -113,9 +113,9 @@ class _SendMsgEchoData(TypedDict):
 class SendMsgEcho(Echo):
 
     class Model(Echo.Model):
-        data: _SendMsgEchoData
+        data: _SendMsgEchoData | None
 
-    data: _SendMsgEchoData
+    data: _SendMsgEchoData | None
 
 
 class _SendForwardMsgEchoData(TypedDict):
@@ -126,9 +126,9 @@ class _SendForwardMsgEchoData(TypedDict):
 class SendForwardMsgEcho(Echo):
 
     class Model(Echo.Model):
-        data: _SendForwardMsgEchoData
+        data: _SendForwardMsgEchoData | None
 
-    data: _SendForwardMsgEchoData
+    data: _SendForwardMsgEchoData | None
 
 
 class _GetMsgEchoData(TypedDict):
@@ -146,11 +146,15 @@ class _GetMsgEchoDataInterface(_GetMsgEchoData):
 class GetMsgEcho(Echo):
 
     class Model(Echo.Model):
-        data: _GetMsgEchoData
+        data: _GetMsgEchoData | None
 
-    data: _GetMsgEchoDataInterface
+    data: _GetMsgEchoDataInterface | None
 
     def __init__(self, **kv_pairs: Any) -> None:
+        super().__init__(**kv_pairs)
+        if self.data is None:
+            return
+
         data = kv_pairs["data"]
         msgs = data["message"]
         segs: list[Segment]
@@ -165,7 +169,6 @@ class GetMsgEcho(Echo):
         else:
             sender = _GroupMessageSender(**data["sender"])
 
-        super().__init__(**kv_pairs)
         self.data["message"] = segs
         self.data["sender"] = sender
 
@@ -180,11 +183,15 @@ class _GetForwardMsgEchoDataInterface(_GetForwardMsgEchoData):
 class GetForwardMsgEcho(Echo):
 
     class Model(Echo.Model):
-        data: _GetForwardMsgEchoData
+        data: _GetForwardMsgEchoData | None
 
-    data: _GetForwardMsgEchoDataInterface
+    data: _GetForwardMsgEchoDataInterface | None
 
     def __init__(self, **kv_pairs: Any) -> None:
+        super().__init__(**kv_pairs)
+        if self.data is None:
+            return
+
         data = kv_pairs["data"]
         msgs = data["message"]
         segs: list[Segment]
@@ -193,7 +200,6 @@ class GetForwardMsgEcho(Echo):
         else:
             segs = [Segment.resolve(seg_dic["type"], seg_dic["data"]) for seg_dic in msgs]
 
-        super().__init__(**kv_pairs)
         self.data["message"] = cast(list[NodeSegment], segs)
 
 
@@ -205,9 +211,9 @@ class _GetLoginInfoEchoData(TypedDict):
 class GetLoginInfoEcho(Echo):
 
     class Model(Echo.Model):
-        data: _GetLoginInfoEchoData
+        data: _GetLoginInfoEchoData | None
 
-    data: _GetLoginInfoEchoData
+    data: _GetLoginInfoEchoData | None
 
 
 class _GetStrangerInfoEchoData(TypedDict):
@@ -220,9 +226,9 @@ class _GetStrangerInfoEchoData(TypedDict):
 class GetStrangerInfoEcho(Echo):
 
     class Model(Echo.Model):
-        data: _GetStrangerInfoEchoData
+        data: _GetStrangerInfoEchoData | None
 
-    data: _GetStrangerInfoEchoData
+    data: _GetStrangerInfoEchoData | None
 
 
 class _GetFriendListEchoElem(TypedDict):
@@ -234,9 +240,9 @@ class _GetFriendListEchoElem(TypedDict):
 class GetFriendListEcho(Echo):
 
     class Model(Echo.Model):
-        data: list[_GetFriendListEchoElem]
+        data: list[_GetFriendListEchoElem] | None
 
-    data: list[_GetFriendListEchoElem]
+    data: list[_GetFriendListEchoElem] | None
 
 
 class _GetGroupInfoEchoData(TypedDict):
@@ -249,17 +255,17 @@ class _GetGroupInfoEchoData(TypedDict):
 class GetGroupInfoEcho(Echo):
 
     class Model(Echo.Model):
-        data: _GetGroupInfoEchoData
+        data: _GetGroupInfoEchoData | None
 
-    data: _GetGroupInfoEchoData
+    data: _GetGroupInfoEchoData | None
 
 
 class GetGroupListEcho(Echo):
 
     class Model(Echo.Model):
-        data: list[_GetGroupInfoEchoData]
+        data: list[_GetGroupInfoEchoData] | None
 
-    data: list[_GetGroupInfoEchoData]
+    data: list[_GetGroupInfoEchoData] | None
 
 
 class _GetGroupMemberInfoEchoData(TypedDict):
@@ -283,17 +289,17 @@ class _GetGroupMemberInfoEchoData(TypedDict):
 class GetGroupMemberInfoEcho(Echo):
 
     class Model(Echo.Model):
-        data: _GetGroupMemberInfoEchoData
+        data: _GetGroupMemberInfoEchoData | None
 
-    data: _GetGroupMemberInfoEchoData
+    data: _GetGroupMemberInfoEchoData | None
 
 
 class GetGroupMemberListEcho(Echo):
 
     class Model(Echo.Model):
-        data: list[_GetGroupMemberInfoEchoData]
+        data: list[_GetGroupMemberInfoEchoData] | None
 
-    data: list[_GetGroupMemberInfoEchoData]
+    data: list[_GetGroupMemberInfoEchoData] | None
 
 
 class _CurrentTalkativeData(TypedDict):
@@ -323,9 +329,9 @@ class _GetGroupHonorInfoEchoData(TypedDict):
 class GetGroupHonorInfoEcho(Echo):
 
     class Model(Echo.Model):
-        data: _GetGroupHonorInfoEchoData
+        data: _GetGroupHonorInfoEchoData | None
 
-    data: _GetGroupHonorInfoEchoData
+    data: _GetGroupHonorInfoEchoData | None
 
 
 class _GetCookiesEchoData(TypedDict):
@@ -335,9 +341,9 @@ class _GetCookiesEchoData(TypedDict):
 class GetCookiesEcho(Echo):
 
     class Model(Echo.Model):
-        data: _GetCookiesEchoData
+        data: _GetCookiesEchoData | None
 
-    data: _GetCookiesEchoData
+    data: _GetCookiesEchoData | None
 
 
 class _GetCsrfTokenEchoData(TypedDict):
@@ -347,9 +353,9 @@ class _GetCsrfTokenEchoData(TypedDict):
 class GetCsrfTokenEcho(Echo):
 
     class Model(Echo.Model):
-        data: _GetCsrfTokenEchoData
+        data: _GetCsrfTokenEchoData | None
 
-    data: _GetCsrfTokenEchoData
+    data: _GetCsrfTokenEchoData | None
 
 
 class _GetCredentialsEchoData(TypedDict):
@@ -360,9 +366,9 @@ class _GetCredentialsEchoData(TypedDict):
 class GetCredentialsEcho(Echo):
 
     class Model(Echo.Model):
-        data: _GetCredentialsEchoData
+        data: _GetCredentialsEchoData | None
 
-    data: _GetCredentialsEchoData
+    data: _GetCredentialsEchoData | None
 
 
 class _GetRecordEchoData(TypedDict):
@@ -372,9 +378,9 @@ class _GetRecordEchoData(TypedDict):
 class GetRecordEcho(Echo):
 
     class Model(Echo.Model):
-        data: _GetRecordEchoData
+        data: _GetRecordEchoData | None
 
-    data: _GetRecordEchoData
+    data: _GetRecordEchoData | None
 
 
 class _GetImageEchoData(TypedDict):
@@ -384,9 +390,9 @@ class _GetImageEchoData(TypedDict):
 class GetImageEcho(Echo):
 
     class Model(Echo.Model):
-        data: _GetImageEchoData
+        data: _GetImageEchoData | None
 
-    data: _GetImageEchoData
+    data: _GetImageEchoData | None
 
 
 class _CanSendImageEchoData(TypedDict):
@@ -396,9 +402,9 @@ class _CanSendImageEchoData(TypedDict):
 class CanSendImageEcho(Echo):
 
     class Model(Echo.Model):
-        data: _CanSendImageEchoData
+        data: _CanSendImageEchoData | None
 
-    data: _CanSendImageEchoData
+    data: _CanSendImageEchoData | None
 
 
 class _CanSendRecordEchoData(TypedDict):
@@ -408,9 +414,9 @@ class _CanSendRecordEchoData(TypedDict):
 class CanSendRecordEcho(Echo):
 
     class Model(Echo.Model):
-        data: _CanSendRecordEchoData
+        data: _CanSendRecordEchoData | None
 
-    data: _CanSendRecordEchoData
+    data: _CanSendRecordEchoData | None
 
 
 class _GetStatusEchoData(TypedDict):
@@ -421,17 +427,19 @@ class _GetStatusEchoData(TypedDict):
 class GetStatusEcho(Echo):
 
     class Model(Echo.Model):
-        data: _GetStatusEchoData
+        data: _GetStatusEchoData | None
 
     def __init__(self, **kv_pairs: Any) -> None:
-        super().__init__(**kv_pairs)
-
         self._model: GetStatusEcho.Model
-        for k, v in kv_pairs["data"].items():
-            if k not in self._model.data:
-                self.data[k] = v  # type: ignore[literal-required]
+        super().__init__(**kv_pairs)
+        if kv_pairs["data"] is None:
+            return
 
-    data: _GetStatusEchoData
+        for k, v in kv_pairs["data"].items():
+            if k not in cast(_GetStatusEchoData, self._model.data):
+                cast(_GetStatusEchoData, self.data)[k] = v  # type: ignore[literal-required]
+
+    data: _GetStatusEchoData | None
 
 
 class _GetVersionInfoEchoData(TypedDict):
@@ -443,14 +451,16 @@ class _GetVersionInfoEchoData(TypedDict):
 class GetVersionInfoEcho(Echo):
 
     class Model(Echo.Model):
-        data: _GetVersionInfoEchoData
+        data: _GetVersionInfoEchoData | None
 
     def __init__(self, **kv_pairs: Any) -> None:
-        super().__init__(**kv_pairs)
-
         self._model: GetVersionInfoEcho.Model
-        for k, v in kv_pairs["data"].items():
-            if k not in self._model.data:
-                self.data[k] = v  # type: ignore[literal-required]
+        super().__init__(**kv_pairs)
+        if kv_pairs["data"] is None:
+            return
 
-    data: _GetVersionInfoEchoData
+        for k, v in kv_pairs["data"].items():
+            if k not in cast(_GetVersionInfoEchoData, self._model.data):
+                cast(_GetVersionInfoEchoData, self.data)[k] = v  # type: ignore[literal-required]
+
+    data: _GetVersionInfoEchoData | None
