@@ -2,7 +2,8 @@ from functools import wraps
 from typing import Callable, cast
 
 from melobot.ctx import Context
-from melobot.handle import Depends, Flow, get_event, inject_deps, no_deps_node
+from melobot.di import Depends, inject_deps
+from melobot.handle import Flow, get_event, no_deps_node
 from melobot.typ import AsyncCallable, HandleLevel, LogicMode
 from melobot.utils import singleton
 
