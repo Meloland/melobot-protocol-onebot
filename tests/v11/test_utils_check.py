@@ -2,7 +2,12 @@ from asyncio import Queue
 
 from melobot_protocol_onebot.v11.adapter import event
 from melobot_protocol_onebot.v11.adapter.segment import AtSegment
-from melobot_protocol_onebot.v11.utils import AtMsgChecker, MsgCheckerFactory, User
+from melobot_protocol_onebot.v11.utils import (
+    AtMsgChecker,
+    GroupRole,
+    LevelRole,
+    MsgCheckerFactory,
+)
 from tests.base import *
 
 _CB_BUF = Queue()
@@ -69,15 +74,16 @@ def priv_e(uid: int):
     return e
 
 
-def group_e(uid: int, gid: int):
+def group_e(uid: int, gid: int, role: str = "member"):
     e = event.GroupMessageEvent(**_GRUOP_EVENT_DICT)
     e.group_id = gid
     e.sender.user_id = e.user_id = uid
+    e.sender.role = role
     return e
 
 
 async def test_msg_checker(msg_factory: MsgCheckerFactory):
-    c1 = msg_factory.get_base(User.NORMAL)
+    c1 = msg_factory.get_base(LevelRole.NORMAL)
     assert await c1.check(priv_e(1))
     assert await c1.check(priv_e(3))
     assert await c1.check(priv_e(4))
@@ -86,25 +92,38 @@ async def test_msg_checker(msg_factory: MsgCheckerFactory):
     assert await c1.check(priv_e(10))
     assert await c1.check(group_e(2, 6))
 
-    c2 = msg_factory.get_base(User.WHITE)
+    c2 = msg_factory.get_base(LevelRole.WHITE)
     assert not await c2.check(priv_e(10))
     _CB_BUF.get_nowait()
 
-    c3 = msg_factory.get_private(User.NORMAL)
+    c3 = msg_factory.get_private(LevelRole.NORMAL)
     assert await c3.check(priv_e(1))
     assert not await c3.check(group_e(1, 6))
     _CB_BUF.get_nowait()
 
-    c4 = msg_factory.get_group(User.NORMAL)
+    c4 = msg_factory.get_group(LevelRole.NORMAL)
     assert not await c4.check(priv_e(1))
     _CB_BUF.get_nowait()
     assert await c4.check(group_e(1, 6))
     assert not await c4.check(group_e(1, 8))
     _CB_BUF.get_nowait()
 
-    c5 = msg_factory.get_base(User.NORMAL, ok_cb=lambda: _CB_BUF.put(True))
+    c5 = msg_factory.get_base(LevelRole.NORMAL, ok_cb=lambda: _CB_BUF.put(True))
     assert await c5.check(priv_e(1))
     _CB_BUF.get_nowait()
+
+    c6 = msg_factory.get_base(GroupRole.OWNER)
+    assert not await c6.check(priv_e(1))
+    _CB_BUF.get_nowait()
+    assert await c6.check(group_e(1, 6, "owner"))
+    assert not await c6.check(group_e(1, 6, "admin"))
+    _CB_BUF.get_nowait()
+    assert not await c6.check(group_e(1, 6, "member"))
+    _CB_BUF.get_nowait()
+
+    c7 = msg_factory.get_base(GroupRole.ADMIN)
+    c8 = msg_factory.get_base(LevelRole.WHITE)
+    assert await (c7 & c8).check(group_e(4, 6, "admin"))
 
 
 def at_e(atid: int | str):

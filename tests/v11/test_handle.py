@@ -10,7 +10,12 @@ from melobot_protocol_onebot.v11.adapter.base import Adapter
 from melobot_protocol_onebot.v11.adapter.event import MessageEvent
 from melobot_protocol_onebot.v11.io.base import BaseIO
 from melobot_protocol_onebot.v11.io.packet import EchoPacket, InPacket, OutPacket
-from melobot_protocol_onebot.v11.utils import CmdParser, GroupMsgChecker, ParseArgs, User
+from melobot_protocol_onebot.v11.utils import (
+    CmdParser,
+    GroupMsgChecker,
+    LevelRole,
+    ParseArgs,
+)
 from tests.base import *
 
 _GRUOP_EVENT_DICT = {
@@ -43,7 +48,7 @@ _GRUOP_EVENT_DICT = {
 h = handle.on_start_match(
     ["123", "456"],
     checker=GroupMsgChecker(
-        level=User.WHITE,
+        role=LevelRole.WHITE,
         owner=1,
         super_users=[2, 3],
         white_users=[4],

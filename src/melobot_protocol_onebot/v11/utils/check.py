@@ -8,7 +8,7 @@ from ..adapter.segment import AtSegment
 from .abc import Checker
 
 
-class User(int, Enum):
+class LevelRole(int, Enum):
     """用户权限等级枚举"""
 
     OWNER = 1 << 4
@@ -16,6 +16,12 @@ class User(int, Enum):
     WHITE = 1 << 2
     NORMAL = 1 << 1
     BLACK = 1
+
+
+class GroupRole(int, Enum):
+    OWNER = 1 << 2
+    ADMIN = 1 << 1
+    MEMBER = 1
 
 
 class MsgChecker(Checker):
@@ -26,7 +32,7 @@ class MsgChecker(Checker):
 
     def __init__(
         self,
-        level: User,
+        role: LevelRole | GroupRole,
         owner: Optional[int] = None,
         super_users: Optional[list[int]] = None,
         white_users: Optional[list[int]] = None,
@@ -36,7 +42,7 @@ class MsgChecker(Checker):
     ) -> None:
         """初始化一个消息事件分级权限检查器
 
-        :param level: 允许的等级（>= 此等级才能通过校验）
+        :param role: 允许的等级（>= 此等级才能通过校验）
         :param owner: 主人的 qq 号
         :param super_users: 超级用户 qq 号列表
         :param white_users: 白名单用户 qq 号列表
@@ -47,30 +53,43 @@ class MsgChecker(Checker):
         super().__init__()
         self.ok_cb = ok_cb
         self.fail_cb = fail_cb
-        self.check_lvl = level
+        self.check_role = role
 
         self.owner = owner
         self.su_list = super_users if super_users is not None else []
         self.white_list = white_users if white_users is not None else []
         self.black_list = black_users if black_users is not None else []
 
-    def _get_level(self, event: MessageEvent) -> User:
+    def _get_level(self, event: MessageEvent) -> LevelRole | GroupRole:
         """获得事件对应的登记"""
-        qid = event.user_id
 
-        if qid in self.black_list:
-            return User.BLACK
-        if qid == self.owner:
-            return User.OWNER
-        if qid in self.su_list:
-            return User.SU
-        if qid in self.white_list:
-            return User.WHITE
-        return User.NORMAL
+        if isinstance(self.check_role, LevelRole):
+            qid = event.user_id
+
+            if qid in self.black_list:
+                return LevelRole.BLACK
+            if qid == self.owner:
+                return LevelRole.OWNER
+            if qid in self.su_list:
+                return LevelRole.SU
+            if qid in self.white_list:
+                return LevelRole.WHITE
+            return LevelRole.NORMAL
+
+        if not event.is_group():
+            return cast(GroupRole, GroupRole.MEMBER >> 1)
+        if event.sender.is_group_owner():
+            return GroupRole.OWNER
+        if event.sender.is_group_admin():
+            return GroupRole.ADMIN
+        return GroupRole.MEMBER
 
     def _check(self, event: MessageEvent) -> bool:
         e_level = self._get_level(event)
-        status = User.BLACK < e_level.value and e_level.value >= self.check_lvl.value
+        if isinstance(e_level, LevelRole):
+            status = LevelRole.BLACK < e_level and e_level >= self.check_role
+        else:
+            status = e_level >= self.check_role
         return status
 
     async def check(self, event: Event) -> bool:
@@ -97,7 +116,7 @@ class GroupMsgChecker(MsgChecker):
 
     def __init__(
         self,
-        level: User,
+        role: LevelRole | GroupRole,
         owner: Optional[int] = None,
         super_users: Optional[list[int]] = None,
         white_users: Optional[list[int]] = None,
@@ -108,7 +127,7 @@ class GroupMsgChecker(MsgChecker):
     ) -> None:
         """初始化一个群聊消息事件分级权限检查器
 
-        :param level: 允许的等级（>= 此等级才能通过校验）
+        :param role: 允许的等级（>= 此等级才能通过校验）
         :param owner: 主人的 qq 号
         :param super_users: 超级用户 qq 号列表
         :param white_users: 白名单用户 qq 号列表
@@ -118,7 +137,7 @@ class GroupMsgChecker(MsgChecker):
         :param fail_cb: 检查不通过的回调
         """
         super().__init__(
-            level, owner, super_users, white_users, black_users, ok_cb, fail_cb
+            role, owner, super_users, white_users, black_users, ok_cb, fail_cb
         )
         self.white_group_list = white_groups if white_groups is not None else []
 
@@ -143,7 +162,7 @@ class PrivateMsgChecker(MsgChecker):
 
     def __init__(
         self,
-        level: User,
+        role: LevelRole,
         owner: Optional[int] = None,
         super_users: Optional[list[int]] = None,
         white_users: Optional[list[int]] = None,
@@ -153,7 +172,7 @@ class PrivateMsgChecker(MsgChecker):
     ) -> None:
         """初始化一个私聊消息事件分级权限检查器
 
-        :param level: 允许的等级（>= 此等级才能通过校验）
+        :param role: 允许的等级（>= 此等级才能通过校验）
         :param owner: 主人的 qq 号
         :param super_users: 超级用户 qq 号列表
         :param white_users: 白名单用户 qq 号列表
@@ -162,7 +181,7 @@ class PrivateMsgChecker(MsgChecker):
         :param fail_cb: 检查不通过的回调
         """
         super().__init__(
-            level, owner, super_users, white_users, black_users, ok_cb, fail_cb
+            role, owner, super_users, white_users, black_users, ok_cb, fail_cb
         )
 
     def _check(self, event: MessageEvent) -> bool:
@@ -209,19 +228,19 @@ class MsgCheckerFactory:
 
     def get_base(
         self,
-        level: User = User.NORMAL,
+        role: LevelRole | GroupRole,
         ok_cb: Optional[AsyncCallable[[], None]] = None,
         fail_cb: Optional[AsyncCallable[[], None]] = None,
     ) -> MsgChecker:
         """根据内部依据和给定等级，生成一个 :class:`MsgChecker` 对象
 
-        :param level: 允许的等级（>= 此等级才能通过校验）
+        :param role: 允许的等级（>= 此等级才能通过校验）
         :param ok_cb: 检查通过的回调
         :param fail_cb: 检查不通过的回调
         :return: 消息事件分级权限检查器
         """
         return MsgChecker(
-            level,
+            role,
             self.owner,
             self.su_list,
             self.white_list,
@@ -232,19 +251,19 @@ class MsgCheckerFactory:
 
     def get_group(
         self,
-        level: User = User.NORMAL,
+        role: LevelRole | GroupRole,
         ok_cb: Optional[AsyncCallable[[], None]] = None,
         fail_cb: Optional[AsyncCallable[[], None]] = None,
     ) -> GroupMsgChecker:
         """根据内部依据和给定等级，生成一个 :class:`GroupMsgChecker` 对象
 
-        :param level: 允许的等级（>= 此等级才能通过校验）
+        :param role: 允许的等级（>= 此等级才能通过校验）
         :param ok_cb: 检查通过的回调
         :param fail_cb: 检查不通过的回调
         :return: 群聊消息事件分级权限检查器
         """
         return GroupMsgChecker(
-            level,
+            role,
             self.owner,
             self.su_list,
             self.white_list,
@@ -256,19 +275,19 @@ class MsgCheckerFactory:
 
     def get_private(
         self,
-        level: User = User.NORMAL,
+        role: LevelRole,
         ok_cb: Optional[AsyncCallable[[], None]] = None,
         fail_cb: Optional[AsyncCallable[[], None]] = None,
     ) -> PrivateMsgChecker:
         """根据内部依据和给定等级，生成一个 :class:`PrivateMsgChecker` 对象
 
-        :param level: 允许的等级（>= 此等级才能通过校验）
+        :param role: 允许的等级（>= 此等级才能通过校验）
         :param ok_cb: 检查通过的回调
         :param fail_cb: 检查不通过的回调
         :return: 私聊消息事件分级权限检查器
         """
         return PrivateMsgChecker(
-            level,
+            role,
             self.owner,
             self.su_list,
             self.white_list,
