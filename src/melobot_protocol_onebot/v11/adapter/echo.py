@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-from time import time_ns
 from typing import Any, Literal, Mapping, cast
 
 from melobot.adapter.model import Echo as RootEcho
-from melobot.utils import get_id
 from pydantic import BaseModel
 from typing_extensions import TypedDict
 
@@ -25,10 +23,7 @@ class Echo(RootEcho):
         self.raw = kv_pairs
 
         super().__init__(
-            int(time_ns() / 1e9),
-            get_id(),
-            PROTOCOL_IDENTIFIER,
-            scope=(),
+            protocol=PROTOCOL_IDENTIFIER,
             ok=self._model.status == "ok",
             status=self._model.retcode,
             data=self._model.data,

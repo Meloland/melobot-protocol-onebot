@@ -4,7 +4,6 @@ from typing import Any, Literal, Sequence, cast
 
 from melobot.adapter import content
 from melobot.adapter.model import Event as RootEvent
-from melobot.utils import get_id
 from pydantic import BaseModel
 
 from ..const import PROTOCOL_IDENTIFIER
@@ -22,9 +21,7 @@ class Event(RootEvent):
         self._model = self.Model(**event_data)
         self.time: int
 
-        super().__init__(
-            self._model.time, get_id(), PROTOCOL_IDENTIFIER, scope=(), contents=()
-        )
+        super().__init__(self._model.time, protocol=PROTOCOL_IDENTIFIER)
         self.self_id = self._model.self_id
         self.post_type = self._model.post_type
 

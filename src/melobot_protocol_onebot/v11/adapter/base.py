@@ -19,10 +19,10 @@ from melobot.utils import singleton
 from ..const import PROTOCOL_IDENTIFIER, P
 from ..io.base import BaseIO
 from ..io.packet import EchoPacket, InPacket, OutPacket
-from . import action as ac  # pylint: disable=no-name-in-module
-from . import echo as ec  # pylint: disable=no-name-in-module
-from . import event as ev  # pylint: disable=no-name-in-module
-from . import segment as se  # pylint: disable=no-name-in-module
+from . import action as ac
+from . import echo as ec
+from . import event as ev
+from . import segment as se
 from .action import Action
 from .echo import Echo
 from .event import Event

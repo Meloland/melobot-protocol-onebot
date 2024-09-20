@@ -1,9 +1,9 @@
 import asyncio
 from asyncio import Queue, create_task
 
-from melobot.adapter.generic import send_text
 from melobot.bot import Bot
 from melobot.handle import Flow, node
+from melobot.handle.generic import send_text
 from melobot.log import GenericLogger
 from melobot.plugin import Plugin
 

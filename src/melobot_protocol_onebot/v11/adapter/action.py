@@ -1,10 +1,8 @@
 import json
-from time import time_ns
 from typing import Any, Iterable, Literal, Optional
 
 from melobot.adapter.model import Action as RootAction
 from melobot.handle import try_get_event
-from melobot.utils import get_id
 from typing_extensions import TypedDict
 
 from ..const import PROTOCOL_IDENTIFIER
@@ -15,14 +13,7 @@ class Action(RootAction):
     def __init__(self, type: str, params: dict[str, Any]) -> None:
         self.time: int
 
-        super().__init__(
-            int(time_ns() / 1e9),
-            get_id(),
-            PROTOCOL_IDENTIFIER,
-            scope=(),
-            contents=(),
-            trigger=try_get_event(),
-        )
+        super().__init__(protocol=PROTOCOL_IDENTIFIER, trigger=try_get_event())
 
         self.type = type
         self.params = params
