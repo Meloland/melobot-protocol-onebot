@@ -1,7 +1,7 @@
 from typing import Literal
 
 from pydantic import ValidationError
-from typing_extensions import TypedDict, reveal_type
+from typing_extensions import TypedDict
 
 from melobot_protocol_onebot.v11.adapter import segment as seg
 from tests.base import *
